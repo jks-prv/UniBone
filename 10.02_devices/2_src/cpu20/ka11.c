@@ -134,7 +134,6 @@ ka11_reset(KA11 *cpu)
 int
 dati(KA11 *cpu, int b)
 {
-trace("dati %06o:\n", cpu->ba);
 	if(!b && cpu->ba&1)
 		goto be;
 
@@ -159,11 +158,11 @@ trace("dati %06o:\n", cpu->ba);
 	if(dati_bus(cpu->bus))
 		goto be;
 ok:
-	trace("%06o\n", cpu->bus->data);
+	trace("DATI [%06o] => %06o\n", cpu->ba, cpu->bus->data);
 	cpu->be = 0;
 	return 0;
 be:
-	trace("BE\n");
+	trace("DATI [%06o]: NXM\n", cpu->ba);
 	cpu->be++;
 	return 1;
 }
@@ -171,7 +170,7 @@ be:
 int
 dato(KA11 *cpu, int b)
 {
-trace("dato %06o %06o %d\n", cpu->ba, cpu->bus->data, b);
+trace("%s [%06o] <= %06o\n", b? "DATOB":"DATO", cpu->ba, cpu->bus->data);
 	if(!b && cpu->ba&1)
 		goto be;
 
@@ -363,8 +362,8 @@ step(KA11 *cpu)
 #define OUT(a,d)	cpu->ba = (a); cpu->bus->data = (d); if(dato(cpu, 0)) goto be
 #define IN(d)	if(dati(cpu, 0)) goto be; d = cpu->bus->data
 #define INA(a,d)	cpu->ba = a; if(dati(cpu, 0)) goto be; d = cpu->bus->data
-#define TR(m)	trace("%06o "#m"\n", PC-2)
-#define TRB(m)	trace("%06o "#m"%s\n", PC-2, by ? "B" : "")
+#define TR(m)	trace("EXEC [%06o] "#m"\n", PC-2)
+#define TRB(m)	trace("EXEC [%06o] "#m"%s\n", PC-2, by ? "B" : "")
 
 	oldpsw = PSW;
 	INA(PC, cpu->ir);
