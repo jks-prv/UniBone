@@ -446,7 +446,7 @@ void unibusadapter_c::request_execute_active_on_PRU(unsigned level_index) {
 
 		/* if DMA is done in multiple chunks,
 		 then after PRU is complete, we don not call "active_complete() to remove the request.
-		 Instead we leave it active, with transferrred data clipped from buffer start.
+		 Instead we leave it active, with transferred data clipped from buffer start.
 		 the "complete" signal will relaunch the remaining dma request automatically
 		 we need a new address "chunk_start_addr" in dma_request_c
 
@@ -545,7 +545,7 @@ void unibusadapter_c::DMA(dma_request_c& dma_request, bool blocking, uint8_t uni
 	// lowest priority reserved for CPU
 	assert(!dma_request.is_cpu_access || dma_request.priority_slot == 31);
 
-	// ignore calls if INIT cndition
+	// ignore calls if INIT condition
 	if (line_INIT) {
 		dma_request.complete = true;
 		return;
