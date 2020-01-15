@@ -142,7 +142,7 @@ uint8_t unibus_c::probe_grant_continuity(bool error_if_closed) {
 	// and read back
 	mailbox->buslatch.addr = 0;
 	mailbox->buslatch.bitmask = PRIORITY_ARBITRATION_BIT_MASK;
-	mailbox->buslatch.val = 0x00; // output 0 = against pullups
+	mailbox->buslatch.val = 0x00;// output 0 = against pullups
 	mailbox_execute(ARM2PRU_BUSLATCH_SET);
 
 	// Read back BG*_IN/NPG_IN bits from latch 0
@@ -338,6 +338,29 @@ void unibus_c::mem_access_random(uint8_t unibus_control, uint16_t *words,
 	} while (block_unibus_start_addr <= unibus_end_addr);
 }
 
+// print a "memory test mismatch" message
+// uses "testwords[]"
+void unibus_c::test_mem_print_error(uint32_t mismatch_count, 
+		uint32_t start_addr, uint32_t end_addr, uint32_t cur_test_addr, uint16_t found_mem_val) {
+	uint16_t expected_mem_val = testwords[cur_test_addr / 2];
+	// print bitwise error mask
+	printf("\nMemory mismatch #%u at %06o: expected %06o, found %06o, diff mask = %06o.  ",
+		mismatch_count,
+			cur_test_addr, expected_mem_val, found_mem_val, expected_mem_val ^ found_mem_val);
+
+	// to analyze address errors: into which addresses should the test value have been written.
+	int mem_val_found_count=0 ;
+		for (uint32_t addr = start_addr ; addr < end_addr ; addr += 2)
+			if (testwords[addr/2] == found_mem_val) {
+				if (mem_val_found_count == 0)
+					printf("\n  Found mem value %06o was written to addresses:", found_mem_val) ;
+				printf(" %06o", addr) ;
+				mem_val_found_count++ ;
+			}
+	if ( mem_val_found_count==0 )
+		printf("\n Test value %06o was never written in this pass.", expected_mem_val) ;
+}
+
 // arbitration_active: if 1, perform NPR/NPG/SACK arbitration before mem accesses
 void unibus_c::test_mem(uint32_t start_addr, uint32_t end_addr, unsigned mode) {
 #define MAX_ERROR_COUNT	8
@@ -353,9 +376,12 @@ void unibus_c::test_mem(uint32_t start_addr, uint32_t end_addr, unsigned mode) {
 	SIGINTcatchnext();
 	switch (mode) {
 	case 1: // single write, multiple read, "address" pattern
-		/**** 1. Generate test values: only for even addresses */
+		/**** 1. Generate test values: only for even addresses
+		*/
 		for (cur_test_addr = start_addr; cur_test_addr <= end_addr; cur_test_addr += 2)
-			testwords[cur_test_addr / 2] = (cur_test_addr >> 1) & 0xffff;
+			testwords[cur_test_addr / 2] = 
+				// even 18 bit address  => 17 bits significant => msb bit 17 as XOR
+				((cur_test_addr >> 1) & 0xffff) ^ (cur_test_addr >> 17);
 		/**** 2. Write memory ****/
 		progress.put("W");  //info : full memory write
 		mem_write(testwords, start_addr, end_addr, &timeout);
@@ -376,10 +402,7 @@ void unibus_c::test_mem(uint32_t start_addr, uint32_t end_addr, unsigned mode) {
 				uint16_t cur_mem_val = membuffer->data.words[cur_test_addr / 2];
 				mismatch = (testwords[cur_test_addr / 2] != cur_mem_val);
 				if (mismatch && ++mismatch_count <= MAX_ERROR_COUNT) // print only first errors
-					printf(
-							"\nMemory mismatch #%d at %06o: expected %06o, found %06o, diff mask = %06o.  ",
-							mismatch_count, cur_test_addr, testwords[cur_test_addr / 2],
-							cur_mem_val, testwords[cur_test_addr / 2] ^ cur_mem_val);
+					test_mem_print_error(mismatch_count, start_addr, end_addr, cur_test_addr, cur_mem_val);
 			}
 		} // while
 		break;
@@ -415,10 +438,7 @@ void unibus_c::test_mem(uint32_t start_addr, uint32_t end_addr, unsigned mode) {
 				uint16_t cur_mem_val = membuffer->data.words[cur_test_addr / 2];
 				mismatch = (testwords[cur_test_addr / 2] != cur_mem_val);
 				if (mismatch && ++mismatch_count <= MAX_ERROR_COUNT) // print only first errors
-					printf(
-							"\nMemory mismatch at %06o: expected %06o, found %06o, diff mask = %06o.  ",
-							cur_test_addr, testwords[cur_test_addr / 2], cur_mem_val,
-							testwords[cur_test_addr / 2] ^ cur_mem_val);
+					test_mem_print_error(mismatch_count, start_addr, end_addr, cur_test_addr, cur_mem_val);
 			}
 		} // while
 		break;
@@ -431,4 +451,6 @@ void unibus_c::test_mem(uint32_t start_addr, uint32_t end_addr, unsigned mode) {
 		printf("All OK! Total %d passes, split into %d block writes and %d block reads\n",
 				pass_count, total_write_block_count, total_read_block_count);
 }
+
+
 
