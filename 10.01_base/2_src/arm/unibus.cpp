@@ -176,8 +176,10 @@ uint8_t unibus_c::probe_grant_continuity(bool error_if_closed) {
  * Sequence: 
  * 1. Line power fail -> ACLO active
  * 2. Power supply capacitors empty -> DCLO active
- * 3. Line power back -> ACLO inactive
- * 4. Logic power OK -> DCLO inactive
+ * 3. Logic power OK -> DCLO inactive
+ * 4. Line power back -> ACLO inactive
+ *    ACLO ist specified to go unasserted AFTER DCLO.
+ *    For example, M9312 works only on ACLO as startup condition.
  * phase: 0x01 = only OFF, 0x02 = only ON, 0x03 = ON and OFF
  */
 void unibus_c::powercycle(int phase) {
@@ -193,15 +195,16 @@ void unibus_c::powercycle(int phase) {
 		timeout_c::wait_ms(delay_ms);
 	}
 	if (phase & 0x02) {
+		mailbox->initializationsignal.id = INITIALIZATIONSIGNAL_DCLO;
+		mailbox->initializationsignal.val = 0;
+		mailbox_execute(ARM2PRU_INITALIZATIONSIGNAL_SET);
+		timeout_c::wait_ms(delay_ms);
+		// CPU generates INIT	  
 		mailbox->initializationsignal.id = INITIALIZATIONSIGNAL_ACLO;
 		mailbox->initializationsignal.val = 0;
 		mailbox_execute(ARM2PRU_INITALIZATIONSIGNAL_SET);
 		timeout_c::wait_ms(delay_ms);
-		mailbox->initializationsignal.id = INITIALIZATIONSIGNAL_DCLO;
-		mailbox->initializationsignal.val = 0;
-		mailbox_execute(ARM2PRU_INITALIZATIONSIGNAL_SET);
-		// wait for CPU to come up
-		timeout_c::wait_ms(delay_ms);
+		// CPU executes power fail vector
 	}
 }
 
