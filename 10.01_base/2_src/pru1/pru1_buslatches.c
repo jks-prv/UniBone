@@ -41,6 +41,11 @@ volatile register uint32_t __R31;
 
 buslatches_t buslatches;
 
+// Set certain ADDR lines to const "1"-levels
+// Needed for M9312 boot logic
+uint32_t address_overlay ;
+
+
 /* central function instead of macros eliminates
  optimizer influence.
  */
@@ -142,6 +147,8 @@ void buslatches_reset() {
 	buslatches_setbyte(5, 0x00);
 	buslatches_setbyte(6, 0x00);
 	buslatches_setbits(7, 0xff, 0x00);
+
+	address_overlay = 0 ;
 }
 
 // Test burst of 8 bus latch accesses in read/write mix in max speed

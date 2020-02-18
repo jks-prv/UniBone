@@ -178,7 +178,7 @@ public:
 			override;
 
 	bool on_param_changed(parameter_c *param) override;  // must implement
-	void on_power_changed(void) override;
+	void on_power_changed(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge) override;
 	void on_init_changed(void) override;
 };
 
@@ -217,7 +217,7 @@ public:
 			override;
 
 	bool on_param_changed(parameter_c *param) override;  // must implement
-	void on_power_changed(void) override;
+	void on_power_changed(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge) override;
 	void on_init_changed(void) override;
 };
 

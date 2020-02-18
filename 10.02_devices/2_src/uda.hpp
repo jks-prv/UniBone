@@ -70,7 +70,7 @@ public:
         unibusdevice_register_t *device_reg,
         uint8_t unibus_control) override;
 
-    void on_power_changed(void) override;
+    void on_power_changed(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge) override;
     void on_init_changed(void) override;
 
     void on_drive_status_changed(storagedrive_c *drive) override;

@@ -128,7 +128,7 @@ public:
 	// UNIBUS addr of register[i] = base_addr + 2*i
 	// !! devices have always sequential register address range !!
 	unsigned register_count;
-	unibusdevice_register_t registers[MAX_REGISTERS_PER_DEVICE];
+	unibusdevice_register_t registers[MAX_IOPAGE_REGISTERS_PER_DEVICE];
 
 	unsigned log_channelmask; // channelmask for DEBUG logging
 	//  device is the log channel. one of logger::LC_*
@@ -150,6 +150,12 @@ public:
 	unibusdevice_register_t *register_by_name(string name);
 	unibusdevice_register_t *register_by_unibus_address(uint32_t addr);
 
+
+	// callbacks to let device do something on UNIBUS plugin/plugout
+	virtual void on_before_install(void) {} 
+	virtual void on_after_uninstall(void) {} 
+
+	
 	// callback to be called on controller register DATI/DATO events.
 	// must ACK mailbox.event.signal. Asynchron!
 	// May not generate direct INTR or DMA.

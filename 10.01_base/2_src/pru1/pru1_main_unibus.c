@@ -134,7 +134,7 @@ void main(void) {
 			while ((sm_data_slave_state = sm_data_slave_state())
 					&& EVENT_IS_ACKED(mailbox, deviceregister))
 				// throws signals to ARM,
-				// Acess to internal registers may issue AMR2PRU opcode, so exit loop then
+				// Acess to internal registers may issue ARM2PRU opcode, so exit loop then
 				;// execute complete slave cycle, then check NPR/INTR
 
 			// signal INT or PWR FAIL to ARM
@@ -303,6 +303,18 @@ void main(void) {
 				}
 				mailbox.arm2pru_req = ARM2PRU_NONE; // ACK: done
 				break;
+			case ARM2PRU_ADDRESS_OVERLAY: 
+				// put constant pattern onto UNIBUS ADDRESS lines for
+				// M9312 BOOT vector.
+				// "1" bits are ORed with bus master ADDR output.
+				// Pattern saved in bus latches. 
+				// First PRU DMA cycle clears pattern, but reproduces it.
+				address_overlay = mailbox.address_boot_vector ;
+				buslatches_setbyte(2, address_overlay & 0xff); // addr<0:7> = latch[2]
+				buslatches_setbyte(3, (address_overlay >> 8) & 0xff) ; // addr<8:15> = latch[3]
+				buslatches_setbits(4, 0x03, (address_overlay >> 16) & 0x03); // addr<16:17> = latch[4]<0:1>
+				mailbox.arm2pru_req = ARM2PRU_NONE; // ACK: done
+				break ;
 			case ARM2PRU_BUSLATCH_SET: { // set a mux register
 				// and read back
 				// don't feed "volatile" vars into buslatch_macros !!!

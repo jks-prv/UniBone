@@ -55,11 +55,11 @@ bool storagecontroller_c::on_param_changed(parameter_c *param) {
 // forward BUS events to connected storage drives
 
 // drives are powered if controller is powered
-void storagecontroller_c::on_power_changed() {
+void storagecontroller_c::on_power_changed(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge) {
 	vector<storagedrive_c*>::iterator it;
 	for (it = storagedrives.begin(); it != storagedrives.end(); it++) {
-		(*it)->power_down = power_down;
-		(*it)->on_power_changed();
+		// drives should evaluate only DCLO for power to simualte wall power.
+		(*it)->on_power_changed(aclo_edge, dclo_edge);
 	}
 }
 

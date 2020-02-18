@@ -111,8 +111,9 @@ bool unibusadapter_c::on_param_changed(parameter_c *param) {
 	return device_c::on_param_changed(param); // more actions (for enable)
 }
 
-void unibusadapter_c::on_power_changed(void) {
-
+void unibusadapter_c::on_power_changed(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge) {
+	UNUSED(aclo_edge) ;
+	UNUSED(dclo_edge) ;
 }
 
 void unibusadapter_c::on_init_changed(void) {
@@ -131,7 +132,7 @@ void unibusadapter_c::on_init_changed(void) {
 // dumb and additive
 // result: false = failure
 bool unibusadapter_c::register_device(unibusdevice_c& device) {
-	bool register_handle_used[MAX_REGISTER_COUNT]; // index by handle
+	bool register_handle_used[MAX_IOPAGE_REGISTER_COUNT]; // index by handle
 	unsigned i;
 	unsigned register_handle;
 	unsigned device_handle;
@@ -139,7 +140,7 @@ bool unibusadapter_c::register_device(unibusdevice_c& device) {
 	INFO("UnibusAdapter: Registering device %s", device.name.value.c_str());
 
 	assert(device.handle == 0); // must not be installed already
-	assert(device.register_count <= MAX_REGISTERS_PER_DEVICE);
+	assert(device.register_count <= MAX_IOPAGE_REGISTERS_PER_DEVICE);
 
 	// assign to "backplane position"
 	// search next free "slot"
@@ -161,16 +162,19 @@ bool unibusadapter_c::register_device(unibusdevice_c& device) {
 	for (i = 0; i < device.register_count; i++) {
 		unibusdevice_register_t *device_reg = &(device.registers[i]);
 		device_reg->addr = device.base_addr.value + 2 * i;
-		if ( IOPAGE_REGISTER_ENTRY(*deviceregisters,device_reg->addr)!= 0 )
-		FATAL("register_device() IO page address conflict: %s implements register at %06o, belongs already to other device.",
-		device.name.value.c_str(), device_reg->addr);
+		uint8_t reghandle = IOPAGE_REGISTER_ENTRY(*deviceregisters, device_reg->addr);
+		if (reghandle != 0 && reghandle != IOPAGE_REGISTER_HANDLE_ROM)
+			FATAL(
+					"register_device() IO page address conflict: %s implements register at %06o, belongs already to other device.",
+					device.name.value.c_str(), device_reg->addr);
 	}
 
 	for (i = 0; i < 0x1000; i++) {
 		// scan all addresses in IO page
 		register_handle = deviceregisters->iopage_register_handles[i];
-		assert(register_handle < MAX_REGISTER_COUNT);
-		if (register_handle)
+		assert(register_handle < MAX_IOPAGE_REGISTER_COUNT || register_handle == IOPAGE_REGISTER_HANDLE_ROM);
+		if (register_handle != 0 && register_handle != IOPAGE_REGISTER_HANDLE_ROM)
+			// device registers may decdoe into ROM space, M9312
 			register_handle_used[register_handle] = true;
 	}
 	// allocate new handles for registers of device
@@ -178,10 +182,10 @@ bool unibusadapter_c::register_device(unibusdevice_c& device) {
 	// find highest handle uses so far.
 	register_handle = 0; // biggest handle in use
 	// handle#0 not to be used!
-	for (i = 1; i < MAX_REGISTER_COUNT; i++)
+	for (i = 1; i < MAX_IOPAGE_REGISTER_COUNT; i++)
 		if (register_handle_used[i])
 			register_handle = i;
-	unsigned free_handles = MAX_REGISTER_COUNT - register_handle - 1;
+	unsigned free_handles = MAX_IOPAGE_REGISTER_COUNT - register_handle - 1;
 	if (free_handles < device.register_count) {
 		ERROR("register_device() can not register device %s, needs %d register, only %d left.",
 				device.name.value.c_str(), device.register_count, free_handles);
@@ -206,10 +210,10 @@ bool unibusadapter_c::register_device(unibusdevice_c& device) {
 		shared_reg->event_flags = 0;
 		// "active" devices are marked with controller handle
 		if (device_reg->active_on_dati || device_reg->active_on_dato) {
-			if (device_reg->active_on_dati && !device_reg->active_on_dato) {
+			if (device_reg->active_on_dati && !device_reg->active_on_dato && device_reg->writable_bits != 0x0000) {
 				FATAL(
 						"register_device() Register configuration error for device %s, register idx %u:\n"
-								"A device register may not be passive on DATO and active on DATI.\n"
+								"A writable device register may not be passive on DATO and active on DATI.\n"
 								"Passive DATO -> value written only saved in shared UNIBUS reg value\n"
 								"Active DATI: shared UNIBUS reg value updated from flipflops -> DATO value overwritten\n"
 								"make DATO active too -> datao value saved in DATO flipflops",
@@ -270,6 +274,45 @@ void unibusadapter_c::unregister_device(unibusdevice_c& device) {
 		IOPAGE_REGISTER_ENTRY(*deviceregisters,addr)= 0;
 		// register descriptor remain unchanged, also device->members
 	}
+}
+
+// mark an IOpage address as "ROM"
+// device register may overlay ROM space (M9312 7730024/26)
+// result: false = failure
+bool unibusadapter_c::register_rom(uint32_t address) {
+	// must be even, must be in IOpage
+	assert((address & 1) == 0);
+	assert(address >= 0760000 && address <= 0777776);
+
+	volatile uint8_t *iopage_cellhandle = &IOPAGE_REGISTER_ENTRY(*deviceregisters, address);
+	// assert: no other ROM installed here, proper nesting of install()/uninstall() required
+	assert(*iopage_cellhandle != IOPAGE_REGISTER_HANDLE_ROM);
+
+	// must not replace device register
+	if (*iopage_cellhandle != 0 && *iopage_cellhandle != IOPAGE_REGISTER_HANDLE_ROM)
+		return false; // address occupied by device register
+
+	// mark address as ROM
+	*iopage_cellhandle = IOPAGE_REGISTER_HANDLE_ROM;
+	return true;
+}
+void unibusadapter_c::unregister_rom(uint32_t address) {
+	// must be even, must be in IOpage
+	assert((address & 1) == 0);
+	assert(address >= 0760000 && address <= 0777776);
+
+	volatile uint8_t *iopage_cellhandle = &IOPAGE_REGISTER_ENTRY(*deviceregisters, address);
+	// assert: ROM (or device reg) installed here, proper nesting of install()/uninstall() required
+	if (*iopage_cellhandle == 0)
+		// may already be 0 if overlaying device register unregistered
+		return ;
+	// do not remove overlaying device registers 
+	if (*iopage_cellhandle != IOPAGE_REGISTER_HANDLE_ROM)
+		return;
+
+	// clear ROM marker	
+	assert(*iopage_cellhandle == IOPAGE_REGISTER_HANDLE_ROM);
+	*iopage_cellhandle = 0;
 }
 
 /*** Access requests in [level,slot] table ***/
@@ -606,15 +649,15 @@ void unibusadapter_c::DMA(dma_request_c& dma_request, bool blocking, uint8_t uni
 				assert(activereq->is_cpu_access);
 				// transfer DATI data to buffer, set success flag, schedule next request
 				worker_device_dma_chunk_complete_event(); // do not signal, uses complete_mutex
-				EVENT_ACK(*mailbox, dma) ;
+				EVENT_ACK(*mailbox, dma);
 				completed = true;
 			}
-			pthread_mutex_unlock(&requests_mutex);//&dma_request.complete_mutex);
+			pthread_mutex_unlock(&requests_mutex); //&dma_request.complete_mutex);
 		} while (!completed);
 //ARM_DEBUG_PIN1(0); // CPU20 performace
 
 	} else if (blocking) {
-		pthread_mutex_lock(&dma_request.complete_mutex)  ;
+		pthread_mutex_lock(&dma_request.complete_mutex);
 		// DMA() is blocking: Wait for request to finish.
 		//	pthread_mutex_lock(&dma_request.mutex);
 		while (!dma_request.complete) {
@@ -807,15 +850,14 @@ void unibusadapter_c::worker_init_event() {
 	pthread_mutex_unlock(&requests_mutex);
 }
 
-void unibusadapter_c::worker_power_event(bool power_down) {
+void unibusadapter_c::worker_power_event(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge) {
 	unsigned device_handle;
 	unibusdevice_c *device;
-	// notify device on change of DC_LO line
-	DEBUG("worker_power_event(power_down=%d)", power_down);
+	// notify device on change of ACLO/DCLO lines
+	DEBUG("worker_power_event(aclo_edge=%d, dclo_edge=%d)", (int)aclo_edge, (int)dclo_edge);
 	for (device_handle = 0; device_handle <= MAX_DEVICE_HANDLE; device_handle++)
 		if ((device = devices[device_handle])) {
-			device->power_down = power_down;
-			device->on_power_changed();
+			device->on_power_changed(aclo_edge, dclo_edge);
 		}
 
 	// Clear bus request queues,
@@ -1049,12 +1091,10 @@ void unibusadapter_c::worker(unsigned instance) {
 			// critical a mix of INIT and DATI/DATO: RESET and register access follow directly
 			// But no DATI/DATO occurs while INIT active. So reconstruct event order by
 			// processing order: INIT_DEASSERT, DATI/O, INIT_ASSERT, DCLO/ACLO
+			device_c::signal_edge_enum aclo_edge = device_c::SIGNAL_EDGE_NONE ;
+			device_c::signal_edge_enum dclo_edge = device_c::SIGNAL_EDGE_NONE ;
 			bool init_raising_edge = false;
 			bool init_falling_edge = false;
-			bool dclo_raising_edge = false;
-			bool dclo_falling_edge = false;
-			bool aclo_raising_edge = false;
-			bool aclo_falling_edge = false;
 			if (!EVENT_IS_ACKED(*mailbox, init)) {
 				any_event = true;
 				// robust: any change in ACLO/DCL=INIT updates state of all 3.
@@ -1074,34 +1114,31 @@ void unibusadapter_c::worker(unsigned instance) {
 				any_event = true;
 				if (mailbox->events.init_signals_cur & INITIALIZATIONSIGNAL_DCLO) {
 					if (!line_DCLO)
-						dclo_raising_edge = true;
+						dclo_edge = device_c::SIGNAL_EDGE_RAISING ;
 					line_DCLO = true;
 				} else {
 					if (line_DCLO)
-						dclo_falling_edge = true;
+						dclo_edge = device_c::SIGNAL_EDGE_FALLING ;
 					line_DCLO = false;
 				}
 				if (mailbox->events.init_signals_cur & INITIALIZATIONSIGNAL_ACLO) {
 					if (!line_ACLO)
-						aclo_raising_edge = true;
+						aclo_edge =  device_c::SIGNAL_EDGE_RAISING  ;
 					line_ACLO = true;
 				} else {
 					if (line_ACLO)
-						aclo_falling_edge = true;
+						aclo_edge = device_c::SIGNAL_EDGE_FALLING;
 					line_ACLO = false;
 				}
 				EVENT_ACK(*mailbox, power); // PRU may re-raise and change mailbox now
 				DEBUG(
-						"EVENT_INITIALIZATIONSIGNALS: (sigprev=0x%x,) cur=0x%x, init_raise=%d, init_fall=%d, dclo_raise/fall=%d%/d, aclo_raise/fall=%d/%d",
+						"EVENT_INITIALIZATIONSIGNALS: (sigprev=0x%x,) cur=0x%x, init_raise=%d, init_fall=%d, aclo_edge=%d, dclo_edge=%d",
 						mailbox->events.init_signals_prev, mailbox->events.init_signals_cur,
-						init_raising_edge, init_falling_edge, dclo_raising_edge,
-						dclo_falling_edge, aclo_raising_edge, aclo_falling_edge);
+						init_raising_edge, init_falling_edge, (int)aclo_edge, (int)dclo_edge) ;
 
 			}
-			if (dclo_raising_edge)
-				worker_power_event(true); // power signal power change
-			else if (aclo_falling_edge)
-				worker_power_event(false); // power signal power change
+			if (aclo_edge != device_c::SIGNAL_EDGE_NONE || dclo_edge != device_c::SIGNAL_EDGE_NONE)
+				worker_power_event(aclo_edge, dclo_edge) ;
 			if (init_falling_edge) // INIT asserted -> deasserted.  DATI/DATO cycle only possible after that.
 				worker_init_event();
 			if (!EVENT_IS_ACKED(*mailbox, deviceregister)) {
@@ -1116,11 +1153,11 @@ void unibusadapter_c::worker(unsigned instance) {
 
 			if (!EVENT_IS_ACKED(*mailbox, dma) && !mailbox->dma.cpu_access) {
 				// not called for CPU DATI/DATO
-				
+
 				any_event = true;
 				pthread_mutex_lock(&requests_mutex);
 				worker_device_dma_chunk_complete_event();
-				
+
 				pthread_mutex_unlock(&requests_mutex);
 				// PRU may have set again event_dma again, if this is called before EVENT signal??
 				// call this only on signal, not on timeout!
@@ -1200,7 +1237,7 @@ void unibusadapter_c::print_shared_register_map() {
 			unibusdevice_c *dev = devices[device_handle];
 			printf("Device #%u \"%s\" @%06o: %u registers\n", device_handle,
 					dev->name.value.c_str(), dev->base_addr.value, dev->register_count);
-			assert(dev->register_count <= MAX_REGISTERS_PER_DEVICE);
+			assert(dev->register_count <= MAX_IOPAGE_REGISTERS_PER_DEVICE);
 			for (i = 0; i < dev->register_count; i++) {
 				unibusdevice_register_t *device_reg = &(dev->registers[i]);
 				char s_active[80];

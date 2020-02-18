@@ -151,7 +151,10 @@ public:
     void Poll(void);
 
 public:
-    void on_power_changed(void) override {}
+    void on_power_changed(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge) override {
+		UNUSED(aclo_edge) ;
+		UNUSED(dclo_edge) ;
+		}
     void on_init_changed(void) override {}
 
 private:

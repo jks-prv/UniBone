@@ -95,9 +95,10 @@ bool rk05_c::on_param_changed(parameter_c *param) {
 // Reset / Power handlers
 //
 
-void rk05_c::on_power_changed(void) {
+void rk05_c::on_power_changed(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge) {
+	UNUSED(aclo_edge) ;
 // called at high priority.
-	if (power_down) {
+	if (dclo_edge == device_c::SIGNAL_EDGE_RAISING) {
 		// power-on defaults
 		drive_reset();
 	}

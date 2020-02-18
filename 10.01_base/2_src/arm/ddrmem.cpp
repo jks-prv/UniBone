@@ -79,6 +79,24 @@ bool ddrmem_c::exam(uint32_t addr, uint16_t *w) {
 	return true;
 }
 
+// independent of memory emulation, memory used for IOpage ROM is always accessible
+bool ddrmem_c::iopage_deposit(uint32_t addr, uint16_t w) {
+	if (addr < 0760000 || addr >= 2*UNIBUS_WORDCOUNT)
+		return false;
+	assert(len >= addr/2) ;
+	base_virtual->memory.words[addr / 2] = w;
+	return true;
+}
+
+bool ddrmem_c::iopage_exam(uint32_t addr, uint16_t *w) {
+	if (addr < 0760000 || addr >= 2*UNIBUS_WORDCOUNT)
+		return false;
+	assert(len >= addr/2) ;
+	*w = base_virtual->memory.words[addr / 2];
+	return true;
+}
+
+
 // write to disk file
 
 void ddrmem_c::save(char *fname) {

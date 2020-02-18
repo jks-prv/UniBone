@@ -44,7 +44,7 @@ public:
 	virtual ~storagecontroller_c(); // classes with virtual functions shoudl have virtual destructors
 
 	virtual bool on_param_changed(parameter_c *param) override;
-	virtual void on_power_changed() override;
+	virtual void on_power_changed(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge) override;
 	virtual void on_init_changed() override;
 	virtual void on_drive_status_changed(storagedrive_c *drive) = 0;
 

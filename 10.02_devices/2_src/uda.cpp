@@ -844,11 +844,11 @@ uda_c::Interrupt(void)
 //  Resets the controller and all attached drives.
 //
 void
-uda_c::on_power_changed(void)
+uda_c::on_power_changed(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge)
 {
-    storagecontroller_c::on_power_changed();
+    storagecontroller_c::on_power_changed(aclo_edge, dclo_edge);
   
-    if (power_down)
+    if (dclo_edge == device_c::SIGNAL_EDGE_RAISING)
     {
         DEBUG("Reset due to power change");
         StateTransition(InitializationStep::Uninitialized);

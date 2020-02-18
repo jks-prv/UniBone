@@ -133,10 +133,16 @@ static statemachine_state_func sm_dma_state_1() {
 //if (addr == 01046) // trigger address
 // 	PRU_DEBUG_PIN0(1) ; // trigger to LA.
 
+	// if M9312 boot vector active: 
+	// Don't put addr on bus, read modified addr back and use,
+	// But: use modifed addr internally, clear on external bus, 
+	// no  UNIBUS member will do another DATI for it.
+	addr |= address_overlay ;
+
 	// addr0..7 = latch[2]
 	buslatches_setbyte(2, addr & 0xff);
 	// addr8..15 = latch[3]
-	buslatches_setbyte(3, (addr >> 8));
+	buslatches_setbyte(3, addr >> 8);
 	// addr 16,17 = latch[4].0,1
 	// C0 = latch[4], bit 2
 	// C1 = latch[4], bit 3
@@ -321,9 +327,10 @@ static statemachine_state_func sm_dma_state_99() {
 		mailbox.dma.cur_addr += 2; // signal progress to ARM
 		return (statemachine_state_func) &sm_dma_state_1; // reloop
 	} else {
-		// remove addr and control from bus
+		// remove addr and control from bus. 
+		// clears also address_overlay from bus
 		buslatches_setbyte(2, 0);
-		buslatches_setbyte(3, 0);
+		buslatches_setbyte(3, 0) ;
 		buslatches_setbits(4, 0x3f, 0);
 		// remove BBSY: latch[1], bit 6
 		buslatches_setbits(1, BIT(6), 0);

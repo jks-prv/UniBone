@@ -473,11 +473,11 @@ void RL11_c::on_after_register_access(unibusdevice_register_t *device_reg,
 	// now SSYN goes inactive !
 }
 
-void RL11_c::on_power_changed(void) {
+void RL11_c::on_power_changed(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge) {
 	// storagecontroller_c forwards to drives
-	storagecontroller_c::on_power_changed();
+	storagecontroller_c::on_power_changed(aclo_edge, dclo_edge);
 
-	if (power_down) {
+	if (dclo_edge == device_c::SIGNAL_EDGE_RAISING) {
 		// power-on - defaults
 		reset();
 		// but I need a valid state before that.

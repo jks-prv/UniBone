@@ -21,6 +21,7 @@
  CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
+ 6-feb-2020	JH		added symbol table
  12-nov-2018  JH      entered beta phase
 
  abstract unibus device
@@ -67,10 +68,12 @@ bool unibusdevice_c::on_param_changed(parameter_c *param) {
 			priority_slot.readonly = true;
 			intr_vector.readonly = true;
 			intr_level.readonly = true;
+			on_before_install() ; // possible callback to device
 			install(); // visible on UNIBUS
 		} else {
 			// disable
 			uninstall();
+			on_after_uninstall() ; // possible callback to device
 			base_addr.readonly = false;
 			priority_slot.readonly = false;
 			intr_vector.readonly = false;
@@ -99,11 +102,15 @@ void unibusdevice_c::install(void) {
 	unibusadapter->register_device(*this); // -> device_c ?
 	// now has handle
 
-	// initial power event.
-	power_down = true;
-	on_power_changed();
-	power_down = false;
-	on_power_changed();
+	// initial power event, 
+	// ACLO active, DCLO inactive
+	on_power_changed(device_c::SIGNAL_EDGE_RAISING, device_c::SIGNAL_EDGE_NONE);
+	// ACLO active, DCLO active
+	on_power_changed(device_c::SIGNAL_EDGE_NONE, device_c::SIGNAL_EDGE_RAISING);
+	// ACLO active, DCLO inactive
+	on_power_changed(device_c::SIGNAL_EDGE_NONE, device_c::SIGNAL_EDGE_FALLING);
+	// ACLO inactive, DCLO inactive
+	on_power_changed(device_c::SIGNAL_EDGE_FALLING, device_c::SIGNAL_EDGE_NONE);
 }
 
 void unibusdevice_c::uninstall(void) {

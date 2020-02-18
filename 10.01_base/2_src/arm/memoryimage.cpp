@@ -1,6 +1,6 @@
 /* memoryimage.cpp - reading and saving several memory file formats
 
- Copyright (c) 2017, Joerg Hoppe, j_hoppe@t-online.de, www.retrocmp.com
+ Copyright (c) 2017-2020, Joerg Hoppe, j_hoppe@t-online.de, www.retrocmp.com
 
  All rights reserved.
 
@@ -31,6 +31,7 @@
  NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+ 6-feb-2020   JH      added code label map
  12-nov-2018  JH      entered beta phase
  18-Jun-2017  JH      created
 
@@ -49,6 +50,26 @@
 
 // single multi purpose memory image buffer
 memoryimage_c *membuffer;
+
+// add integer to all addresses
+void codelabel_map_c::relocate(int delta) {
+	for (codelabel_map_c::iterator it = begin(); it != end(); ++it) {
+		it->second += delta;
+	}
+}
+
+// print tabular listing of labels
+void codelabel_map_c::print(FILE *f) {
+	unsigned i = 1;
+	const char *sep = "Code labels:       "; // 15+4 long
+	for (codelabel_map_c::iterator it = begin(); it != end(); ++it) {
+		i++;
+		// assume format is max abcdefgh=123456 => 4 per row
+		fprintf(f, "%s%-8s=%06o", sep, it->first.c_str(), it->second);
+		sep = (i % 4) ? "    " : "\n";
+	}
+	fprintf(f, "\n");
+}
 
 void memoryimage_c::init() {
 	unsigned wordidx;
@@ -78,17 +99,22 @@ unsigned memoryimage_c::get_word_count(void) {
 // return first and last valid adddres
 // first > last: no data set
 void memoryimage_c::get_addr_range(unsigned *first, unsigned* last) {
-	*first = 0x3FFFF;
-	*last = 0;
+	unsigned _first = 0x3ffff;
+	unsigned _last = 0;
 	unsigned wordidx;
 	for (wordidx = 0; wordidx < MEMORY_WORD_COUNT; wordidx++)
 		if (valid[wordidx]) {
 			unsigned addr = 2 * wordidx;
-			if (addr < *first)
-				*first = addr;
-			if (addr > *last)
-				*last = addr;
+			if (addr < _first)
+				_first = addr;
+			if (addr > _last)
+				_last = addr;
 		}
+
+	if (first)
+		*first = _first;
+	if (last)
+		*last = _last;
 }
 
 // set valid address range to [first..last]
@@ -207,8 +233,6 @@ bool memoryimage_c::load_addr_value_text(const char *fname) {
 		printf("%s\n", fileErrorText("Error opening file %s for write", fname));
 		return false;
 	}
-	entry_address = MEMORY_ADDRESS_INVALID; // not known
-
 	while (fgets(linebuff, sizeof(linebuff), fin)) {
 		// make everything ( including \t, \n ,..) but octal digits a whitespace
 		for (s = linebuff; *s; s++)
@@ -375,7 +399,7 @@ bool memoryimage_c::load_addr_value_text(const char *fname) {
  - data may be 3 digits, then 8bit, or 6 digits, then 16 bit.
  - multiple data per line allowed
 
- Entry label: labels can appear with or without octal data
+ Labels can appear with or without octal data
  case 1: standalone
  |      68 007776                         stack	=	. - 2		; stack growns down from start
  |      69
@@ -412,29 +436,33 @@ static int calc_lineno_width(char *line) {
 }
 
 // return the next literal, opcode or label: alphanum, ".", "$"
-static char *nxt_token(char *tp) {
+// tp "token pointer" is moved on
+static char *nxt_token(char **tp) {
 	static char buff[256];
-	char *s = buff;
-	while (*tp && strchr("ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890$.", toupper(*tp)))
-		*s++ = *tp++;
-	*s = 0;
+	char *w = buff; // write pointer
+	char *r = *tp; // read
+	while (*r && strchr("ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890$.", toupper(*r)))
+		*w++ = *r++;
+	*w = 0;
+	*tp = r; // return new parse pos
 	return buff; // terminate
 }
 
-// entrylabel: name of label to be used as entry address
+// codelabels: filled with label/address pairs on parse
 // result: false = error, true = OK
 // caller must call init() first !
 
-bool memoryimage_c::load_macro11_listing(const char *fname, const char *entrylabel) {
+bool memoryimage_c::load_macro11_listing(const char *fname, codelabel_map_c *codelabels) {
+	char map_label_pending[256]; // found label, wait for address in later lines
+	unsigned map_address_pending;
 	int lineno_fieldwidth = 0;
-	bool next_addr_is_entry = false;
 	FILE *fin;
 	char linebuff[1024];
 	char *tp; // token pointer, start of cur number
 	int tokenidx;
 	bool ready;
 	unsigned val;
-	unsigned addr, line_addr;
+	unsigned addr;
 	char *endptr;
 	int wlen;
 
@@ -443,8 +471,10 @@ bool memoryimage_c::load_macro11_listing(const char *fname, const char *entrylab
 		printf("%s\n", fileErrorText("Error opening file %s", fname));
 		return false;
 	}
-	entry_address = MEMORY_ADDRESS_INVALID; // not (yet) known
+	if (codelabels)
+		codelabels->clear();
 
+	map_label_pending[0] = 0;
 	while (fgets(linebuff, sizeof(linebuff), fin)) {
 		// remove trailing spaces
 		trim_trail(linebuff);
@@ -466,42 +496,60 @@ bool memoryimage_c::load_macro11_listing(const char *fname, const char *entrylab
 		// process all octal digit strings
 		tokenidx = 0; // # of number processed
 		ready = false;
-		addr = 0;
-		line_addr = 0;
+		addr = MEMORY_ADDRESS_INVALID;
+		map_address_pending = MEMORY_ADDRESS_INVALID;
 		while (!ready) {
+			// scan line word-wise
+			// label - address detctionb: 2 cases, see above
+			// case 1: label without addr in smae line, assing first following label
+			// case 2: label in same line with <addr> <code...>
 			while (*tp && isspace(*tp))
 				tp++; // skip white space
-			// entry label case 1:  label without octal addr/data?
-			if (entrylabel && !strcasecmp(nxt_token(tp), entrylabel))
-				next_addr_is_entry = true; // fetch 1st following address
-
+			// parse word. check for 8bit octal, 16bit octal, or string
 			val = strtol(tp, &endptr, 8);
 			wlen = endptr - tp; // len if the numeric word
 			if (wlen == 0) {
-				// entrylabel case 2: label in row with addr/data?
-				// is next word after the entrylabel?
-				if (entrylabel && !strcasecmp(nxt_token(tp), entrylabel))
-					entry_address = line_addr;
-
-				ready = true;
+				// is string. no number => label case 2: label in row with addr/data?
+				char *s = nxt_token(&tp);
+				if (*tp != ':' || *s == '8' || *s == '9') {
+					// exculde non-label strings.
+					// labels must be followed by ':'
+					// local labels beginning with 0..7 already interpeted numeric
+				} else if (map_address_pending != MEMORY_ADDRESS_INVALID) {
+					// case 2: address left of label in same line
+					if (codelabels) {
+						codelabels->add(s, map_address_pending);
+						map_address_pending = MEMORY_ADDRESS_INVALID; // address assignedto label
+					}
+				} else {
+					// case 1: label without addr in same line
+					strcpy(map_label_pending, s);
+				}
+				ready = true; // do only process first non-number in line
 			} else if (wlen == 6) { // 16 bit value
 				if (tokenidx == 0) {
-					line_addr = addr = val; // 1st number: address
-					if (next_addr_is_entry) {
+					map_address_pending = addr = val; // 1st number in line : address
+					if (map_label_pending[0] && codelabels) {
 						// entry label case 1: we hit the entry label before
-						entry_address = line_addr; //
-						next_addr_is_entry = false; // fulfilled
+						codelabels->add(map_label_pending, addr);
+						map_label_pending[0] = 0; // pending label resolved
 					}
 				} else {
 					assert_address(addr);
+					// if marked with ' (like 165442'): calc offset to PC
+					if (*endptr == '\'')
+						val = pc_relative_relocation(addr, val) ;
+
 					put_word(addr, val);
 					addr += 2; // inc by word
 				}
 				tokenidx++;
 				tp = endptr; // skip this number
 
-			} else if (wlen == 3) { // 8 bnt value
+			} else if (wlen == 3) { // 8 bit value
 				assert_address(addr);
+				if (*endptr == '\'')  // see above
+					val = pc_relative_relocation(addr, val) ;
 				put_byte(addr, val);
 				addr++; // inc by byte
 				tokenidx++;
@@ -519,8 +567,9 @@ bool memoryimage_c::load_macro11_listing(const char *fname, const char *entrylab
  * Load a DEC Standard Absolute Papertape Image file
  * result: false = error, true = OK
  * caller must call init() first !
+ * codelabels: contains single "entry" label, if given. or remains empty
  */
-bool memoryimage_c::load_papertape(const char *fname) {
+bool memoryimage_c::load_papertape(const char *fname, codelabel_map_c *codelabels) {
 	FILE *fin;
 	int b;
 	int state = 0;
@@ -535,7 +584,8 @@ bool memoryimage_c::load_papertape(const char *fname) {
 		return false;
 	}
 
-	entry_address = MEMORY_ADDRESS_INVALID; // not yet known
+	if (codelabels)
+		codelabels->clear();
 
 	stream_byte_index = 0;
 	block_byte_size = addr = 0; // -Wmaybe-uninitialized
@@ -605,8 +655,12 @@ bool memoryimage_c::load_papertape(const char *fname) {
 				// block range now known
 				// if block size = 0: entry addr
 				if (block_databyte_count == 0) {
-					entry_address = addr;
-					// DEBUG(xxx, "Empty block with addr = %06o, block_byte_size=%d", addr, block_byte_size);
+					// only save latest record
+					if (codelabels) {
+						codelabels->clear();
+						codelabels->add("entry", addr);
+						// DEBUG(xxx, "Empty block with addr = %06o, block_byte_size=%d", addr, block_byte_size);
+					}
 					state = 0; // empty block. no chksum ?
 				}
 				// else INFO("Papertape: Starting data block with addr = %06o, block_byte_size=%d, databyte_count=%d",
@@ -645,6 +699,7 @@ bool memoryimage_c::load_papertape(const char *fname) {
 }
 
 // show range, count ,start
+// and symbols, if code labels are given
 void memoryimage_c::info(FILE *f) {
 	if (!f)
 		return;
@@ -664,11 +719,8 @@ void memoryimage_c::info(FILE *f) {
 	if (wordcount == 0)
 		fprintf(f, "memory empty\n");
 	else {
-		fprintf(f, "memory filled from %06o to %06o with %u words", first_addr, last_addr,
+		fprintf(f, "memory filled from %06o to %06o with %u words\n", first_addr, last_addr,
 				wordcount);
-		if (entry_address >= 0)
-			fprintf(f, ", entry addr = %06o", entry_address);
-		fprintf(f, "\n");
 	}
 }
 

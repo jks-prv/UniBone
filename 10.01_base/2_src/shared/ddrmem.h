@@ -54,9 +54,13 @@ public:
 	void clear(void);
 	void fill_pattern(void);
 	void fill_pattern_pru(void);
-	void unibus_slave(uint32_t startaddr, uint32_t endaddr);bool set_range(uint32_t startaddr,
-			uint32_t endaddr);bool deposit(uint32_t addr, uint16_t w);bool exam(uint32_t addr,
-			uint16_t *w);
+	void unibus_slave(uint32_t startaddr, uint32_t endaddr);
+	bool set_range(uint32_t startaddr, 	uint32_t endaddr);
+	bool deposit(uint32_t addr, uint16_t w);
+	bool exam(uint32_t addr, uint16_t *w);
+	bool iopage_deposit(uint32_t addr, uint16_t w) ;
+	bool iopage_exam(uint32_t addr, uint16_t *w) ;
+	
 };
 
 #ifndef _DDRMEM_C_

@@ -70,12 +70,12 @@ void application_c::menu_masterslave(const char *menu_code, bool with_CPU) {
 	// These test need active PRUs
 	hardware_startup(pru_c::PRUCODE_UNIBUS);
 	buslatches_output_enable(true);
-	unibus->set_arbitrator_active(with_CPU) ;
-		
+	unibus->set_arbitrator_active(with_CPU);
+
 	// PRUCODE_UNIBUS can raise events (INIT,ACLO,DCLO) 
 	// handle & clear these
 	unibusadapter->enabled.set(true);
-	if (testcontroller_enabled) 
+	if (testcontroller_enabled)
 		testcontroller.enabled.set(true);
 
 	ready = false;
@@ -224,8 +224,7 @@ void application_c::menu_masterslave(const char *menu_code, bool with_CPU) {
 				if (wordcount > WORDBUFFER_LEN)
 					wordcount = WORDBUFFER_LEN;
 			}
-			timeout = !unibus->dma(true, UNIBUS_CONTROL_DATI, cur_addr,
-					wordbuffer, wordcount);
+			timeout = !unibus->dma(true, UNIBUS_CONTROL_DATI, cur_addr, wordbuffer, wordcount);
 			for (i = 0; cur_addr <= unibus->dma_request->unibus_end_addr; i++, cur_addr += 2)
 				printf("EXAM %06o -> %06o\n", cur_addr, wordbuffer[i]);
 			cur_addr = unibus->dma_request->unibus_end_addr;
@@ -271,8 +270,7 @@ void application_c::menu_masterslave(const char *menu_code, bool with_CPU) {
 				parse_word(s_param[0], &wordbuffer[0]);
 				wordcount = 1;
 			}
-			timeout = !unibus->dma(true, UNIBUS_CONTROL_DATO, cur_addr,
-					wordbuffer, wordcount);
+			timeout = !unibus->dma(true, UNIBUS_CONTROL_DATO, cur_addr, wordbuffer, wordcount);
 			for (i = 0; cur_addr <= unibus->dma_request->unibus_end_addr; i++, cur_addr += 2)
 				printf("DEPOSIT %06o <- %06o\n", cur_addr, wordbuffer[i]);
 			cur_addr = unibus->dma_request->unibus_end_addr;
@@ -309,7 +307,10 @@ void application_c::menu_masterslave(const char *menu_code, bool with_CPU) {
 			bool timeout;
 			unsigned wordcount;
 			unsigned startaddr, endaddr;
+			codelabel_map_c codelabels;
+			
 			membuffer->init();
+			codelabels.clear() ;
 			if (!strcasecmp(s_opcode, "lb")) {
 				printf("Loading memory content from binary file %s\n", s_param[0]);
 				membuffer->init();
@@ -317,16 +318,16 @@ void application_c::menu_masterslave(const char *menu_code, bool with_CPU) {
 			} else if (!strcasecmp(s_opcode, "ll")) {
 				printf("Loading memory content from MACRO-11 listing %s\n", s_param[0]);
 				membuffer->init();
-				load_ok = membuffer->load_macro11_listing(s_param[0], "start");
+				load_ok = membuffer->load_macro11_listing(s_param[0], &codelabels);
 			} else if (!strcasecmp(s_opcode, "lp")) {
 				printf("Loading memory content from Absolute Papertape image file %s\n",
 						s_param[0]);
 				membuffer->init();
-				load_ok = membuffer->load_papertape(s_param[0]);
-				if (membuffer->entry_address == MEMORY_ADDRESS_INVALID)
+				load_ok = membuffer->load_papertape(s_param[0], &codelabels);
+				if (codelabels.size() <= 0)
 					printf("No entry address defined.\n");
 				else
-					printf("Entry address is %06o.\n", membuffer->entry_address);
+					printf("Entry address is %06o.\n", codelabels.begin()->second);
 			} else if (!strcasecmp(s_opcode, "lt")) {
 				printf("Loading memory content from \"adr-value pairs\" text file %s\n",
 						s_param[0]);
@@ -340,8 +341,8 @@ void application_c::menu_masterslave(const char *menu_code, bool with_CPU) {
 				membuffer->get_addr_range(&startaddr, &endaddr);
 				printf("Loaded %u words, writing UNIBUS memory[%06o:%06o].\n", wordcount,
 						startaddr, endaddr);
-				unibus->mem_write(membuffer->data.words, startaddr, endaddr,
-						&timeout);
+				codelabels.print(stdout) ;
+				unibus->mem_write(membuffer->data.words, startaddr, endaddr, &timeout);
 			}
 		} else if (!strcasecmp(s_opcode, "s") && (n_fields == 2)) {
 			bool timeout;

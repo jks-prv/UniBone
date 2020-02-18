@@ -41,12 +41,13 @@
 #define ARM2PRU_BUSLATCH_EXERCISER	7 	// exercise 8 accesses to mux registers
 #define ARM2PRU_BUSLATCH_TEST	8 	// read a mux register
 #define ARM2PRU_INITALIZATIONSIGNAL_SET		9 	// set an ACL=/DCLO/INIT signal
+#define ARM2PRU_ADDRESS_OVERLAY	10 	// const ADRRESS bits for M9312 BOOT logic
 #define ARM2PRU_ARB_MODE_NONE		11               // DMA without NPR/NPG/SACK arbitration
 #define ARM2PRU_ARB_MODE_CLIENT		12               // DMA with arbitration by external Arbitrator
 #define ARM2PRU_DMA		13               // DMA with selected arbitration
 #define ARM2PRU_INTR		14               // INTR with arbitration by external Arbitrator
 #define ARM2PRU_INTR_CANCEL		15               // clear INTR which has been requested
-#define ARM2PRU_CPU_ENABLE		16	// siwtch CPU master side functions ON/OFF
+#define ARM2PRU_CPU_ENABLE		16	// switch CPU master side functions ON/OFF
 #define ARM2PRU_DDR_FILL_PATTERN	17	// fill DDR with test pattern
 #define ARM2PRU_DDR_SLAVE_MEMORY	18	// use DDR as UNIBUS slave memory
 #define ARM2PRU_ARB_GRANT_INTR_REQUESTS	19 // emulated CPU answers device requests
@@ -294,6 +295,7 @@ typedef struct {
 		mailbox_buslatch_exerciser_t buslatch_exerciser;
 		mailbox_initializationsignal_t initializationsignal;
 		uint32_t cpu_enable;
+		uint32_t address_boot_vector;
 	};
 } mailbox_t;
 

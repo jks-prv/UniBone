@@ -42,8 +42,32 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <assert.h>
+#include <map>
+#include <string>
 
 #include "unibus.h"
+
+/*** Address map ***/
+class codelabel_map_c: public std::map<std::string, unsigned> {
+public:
+	// clear()
+	void add(string label, unsigned address) {
+		insert(std::make_pair(label, address));
+	}
+
+	bool is_defined(string label) {
+		return count(label) > 0;
+	}
+
+	unsigned get_address(string label) {
+		return at(label);
+	}
+
+	void relocate(int delta) ;
+
+	void print(FILE *f) ;
+
+};
 
 typedef enum {
 	fileformat_none = 0,
@@ -60,12 +84,20 @@ typedef enum {
 
 class memoryimage_c: public logsource_c {
 private:
-	uint16_t get_word(unsigned addr) {
-		return data.words[addr / 2];
-	}
 	void put_word(unsigned addr, uint16_t w) {
 		data.words[addr / 2] = w;
 		valid[addr / 2] = true;
+	}
+
+	// if w is a PC relative address, marked in listings with '
+	// 165124 105767  165004'		   T4:	tstb	data1			; test a byte, if we get here...
+	// => 165126 165004'
+	// => 165126 165004 - pc
+	// => 165126 165004 - (165126 + 2)
+	// => 165126 177654
+	uint16_t pc_relative_relocation(unsigned addr, uint16_t w) {
+		w = (w - (addr + 2)) & 0xffff ;
+		return w;
 	}
 
 	void put_byte(unsigned addr, unsigned b);
@@ -80,7 +112,6 @@ public:
 	// word idx IS NOT the addr, addr = idx + 2
 	unibus_memory_t data; // array with data words
 	//uint16_t words[MEMORY_WORD_COUNT];
-	int entry_address; // start address, if found. MEMORY_ADDRESS_INVALID = invalid
 
 	memoryimage_c() {
 		log_label = "MEMIMG";
@@ -94,15 +125,25 @@ public:
 		assert_address(addr);
 		return valid[wordidx];
 	}
+
+	uint16_t get_word(unsigned addr) {
+		return data.words[addr / 2];
+	}
+
+
 	void fill(uint16_t fillword);
 
 	void get_addr_range(unsigned *first, unsigned* last);
 	unsigned get_word_count(void);
 	void set_addr_range(unsigned first, unsigned last);
 
-	bool load_addr_value_text(const char *fname);bool load_macro11_listing(const char *fname,
-			const char *entrylabel);bool load_papertape(const char *fname);bool load_binary(
-			const char *fname);
+	bool load_addr_value_text(const char *fname);
+
+	bool load_macro11_listing(const char *fname, 		codelabel_map_c *codelabels);
+
+	bool load_papertape(const char *fname, 		codelabel_map_c *codelabels);
+
+	bool load_binary(const char *fname);
 
 	void save_binary(const char *fname, unsigned bytecount);
 

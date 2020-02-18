@@ -57,22 +57,25 @@ uint8_t iopageregisters_read(uint32_t addr, uint16_t *val) {
 		*val = DDRMEM_MEMGET_W(addr);
 		return 1;
 	} else if (page_table_entry == PAGE_IO) {
-//		uint8_t reghandle = deviceregisters.iopage_register_handles[ADDR2IOPAGEWORD(addr)];
 		uint8_t reghandle;
 		reghandle = IOPAGE_REGISTER_ENTRY(deviceregisters, addr);
-		if (!reghandle) {
+		if (reghandle == 0) {
 			return 0; // register not implemented as "active"
-		}
-		// return register value. remove "volatile" attribute
-		// indexing this records takes 4,6 us, if record size != 8
-		iopageregister_t *reg = (iopageregister_t *) &(deviceregisters.registers[reghandle]); // alias
-		*val = reg->value;
-		if (reg->event_flags & IOPAGEREGISTER_EVENT_FLAG_DATI)
-			DO_EVENT_DEVICEREGISTER(reg, UNIBUS_CONTROL_DATI, addr, *val);
-		// ARM is clearing this, while SSYN asserted, so no concurrent next bus cycle.
-		// no concurrent ARP+PRU access
+		} else if (reghandle == IOPAGE_REGISTER_HANDLE_ROM) {
+			*val = DDRMEM_MEMGET_W(addr);
+			return 1;
+		} else {
+			// return register value. remove "volatile" attribute
+			// indexing this records takes 4,6 us, if record size != 8
+			iopageregister_t *reg = (iopageregister_t *) &(deviceregisters.registers[reghandle]); // alias
+			*val = reg->value;
+			if (reg->event_flags & IOPAGEREGISTER_EVENT_FLAG_DATI)
+				DO_EVENT_DEVICEREGISTER(reg, UNIBUS_CONTROL_DATI, addr, *val);
+			// ARM is clearing this, while SSYN asserted, so no concurrent next bus cycle.
+			// no concurrent ARP+PRU access
 
-		return 1;
+			return 1;
+		}
 	} else
 		return 0;
 }
@@ -91,17 +94,20 @@ uint8_t iopageregisters_write_w(uint32_t addr, uint16_t w) {
 		DDRMEM_MEMSET_W(addr, w);
 		return 1;
 	} else if (page_table_entry == PAGE_IO) {
-//		uint8_t reghandle = deviceregisters.iopage_register_handles[ADDR2IOPAGEWORD(addr)];
 		uint8_t reghandle = IOPAGE_REGISTER_ENTRY(deviceregisters, addr);
-		if (!reghandle)
+		if (reghandle == 0) {
 			return 0; // register not implemented
-		// change register value
-		iopageregister_t *reg = (iopageregister_t *) &(deviceregisters.registers[reghandle]); // alias
-		uint16_t reg_val = (reg->value & ~reg->writable_bits) | (w & reg->writable_bits);
-		reg->value = reg_val;
-		if (reg->event_flags & IOPAGEREGISTER_EVENT_FLAG_DATO)
-			DO_EVENT_DEVICEREGISTER(reg, UNIBUS_CONTROL_DATO, addr, reg_val);
-		return 1;
+		} else if (reghandle == IOPAGE_REGISTER_HANDLE_ROM) {
+			return 0; // ROM does not respond to DATO
+		} else {
+			// change register value
+			iopageregister_t *reg = (iopageregister_t *) &(deviceregisters.registers[reghandle]); // alias
+			uint16_t reg_val = (reg->value & ~reg->writable_bits) | (w & reg->writable_bits);
+			reg->value = reg_val;
+			if (reg->event_flags & IOPAGEREGISTER_EVENT_FLAG_DATO)
+				DO_EVENT_DEVICEREGISTER(reg, UNIBUS_CONTROL_DATO, addr, reg_val);
+			return 1;
+		}
 	} else
 		return 0;
 }
@@ -113,26 +119,29 @@ uint8_t iopageregisters_write_b(uint32_t addr, uint8_t b) {
 		DDRMEM_MEMSET_B(addr, b);
 		return 1;
 	} else if (page_table_entry == PAGE_IO) {
-//		uint8_t reghandle = deviceregisters.iopage_register_handles[ADDR2IOPAGEWORD(addr)];
 		uint8_t reghandle = IOPAGE_REGISTER_ENTRY(deviceregisters, addr);
-		if (!reghandle)
+		if (reghandle == 0) {
 			return 0; // register not implemented
-		// change register value
-		iopageregister_t *reg = (iopageregister_t *) &(deviceregisters.registers[reghandle]); // alias
-		uint16_t reg_val;
-		if (addr & 1)  // odd address = write upper byte
-			reg_val = (reg->value & 0x00ff) // don't touch lower byte
-			| (reg->value & ~reg->writable_bits & 0xff00) // protected upper byte bits
-					| (((uint16_t) b << 8) & reg->writable_bits); // changed upper byte bits
-		else
-			// even address: write lower byte
-			reg_val = (reg->value & 0xff00) // don' touch upper byte
-			| (reg->value & ~reg->writable_bits & 0x00ff) // protected upper byte bits
-					| (b & reg->writable_bits); // changed lower byte bits
-		reg->value = reg_val;
-		if (reg->event_flags & IOPAGEREGISTER_EVENT_FLAG_DATO)
-			DO_EVENT_DEVICEREGISTER(reg, UNIBUS_CONTROL_DATOB, addr, reg_val);
-		return 1;
+		} else if (reghandle == IOPAGE_REGISTER_HANDLE_ROM) {
+			return 0; // ROM does not respond to DATOB
+		} else {
+			// change register value
+			iopageregister_t *reg = (iopageregister_t *) &(deviceregisters.registers[reghandle]); // alias
+			uint16_t reg_val;
+			if (addr & 1)  // odd address = write upper byte
+				reg_val = (reg->value & 0x00ff) // don't touch lower byte
+				| (reg->value & ~reg->writable_bits & 0xff00) // protected upper byte bits
+						| (((uint16_t) b << 8) & reg->writable_bits); // changed upper byte bits
+			else
+				// even address: write lower byte
+				reg_val = (reg->value & 0xff00) // don' touch upper byte
+				| (reg->value & ~reg->writable_bits & 0x00ff) // protected upper byte bits
+						| (b & reg->writable_bits); // changed lower byte bits
+			reg->value = reg_val;
+			if (reg->event_flags & IOPAGEREGISTER_EVENT_FLAG_DATO)
+				DO_EVENT_DEVICEREGISTER(reg, UNIBUS_CONTROL_DATOB, addr, reg_val);
+			return 1;
+		}
 	} else
 		return 0;
 

@@ -78,7 +78,7 @@ void parameter_string_c::set(string new_value) {
 	this->new_value = new_value;
 	// reject parsed value, if device parameter check complains
 	if (parameterized == NULL || parameterized->on_param_changed(this))
-		value = new_value;
+		value = this->new_value; // device may have changed "new_value"
 }
 
 // string parsing is just copying

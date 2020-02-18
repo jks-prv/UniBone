@@ -26,24 +26,39 @@
 
 #include "unibuscpu.hpp"
 
-void unibuscpu_c::on_power_changed(void) {
-// called within a bus_cycle, and initiates other cycles?!
-//assert(dbg==0) ;
-	if (power_down) { // power-on defaults
-		INFO("CPU: ACLO failed");
+void unibuscpu_c::on_power_changed(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge) {
+	// called within a bus_cycle, and initiates other cycles?!
+	// Emulation of old behaviour
+	if (dclo_edge == device_c::SIGNAL_EDGE_RAISING) {    
+		INFO("CPU: DCLO failed");
 		power_event = power_event_down;
 //			ka11_pwrdown(&unibone_cpu->ka11);
 		// ACLO failed. 
-		// CPU traps to vector 24 and has 2ms time to execute code
-	} else {
-		INFO("CPU: DCLO restored");
+			// CPU traps to vector 24 and has 2ms time to execute code
+	} else if (aclo_edge == device_c::SIGNAL_EDGE_FALLING) {
+		INFO("CPU: ACLO restored");
 		power_event = power_event_up;
 //			ka11_pwrup(&unibone_cpu->ka11);
 		// DCLO restored
 		// CPU loads PC and PSW from vector 24 
 		// if HALTed: do nothing, user is expected to setup PC and PSW ?
-	}
+	} else
+		power_event = power_event_none ;
+/*	 	
+		
 
+on DCLO: set INIT
+on ACLO: init, timeout, 
+set "power_up_pending"
+
+On start (rmeove of HALT):
+if (power_up_pending) fect 24/26, start executiuon
+
+fetch vector 24/26,
+
+//assert(dbg==0) ;
+	if (power_down) { // power-on defaults
+*/
 }
 
 // UNIBUS INIT: clear all registers

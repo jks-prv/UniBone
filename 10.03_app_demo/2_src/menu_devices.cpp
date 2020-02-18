@@ -53,23 +53,31 @@
 #include "rk11.hpp"
 #include "uda.hpp"
 #include "dl11w.hpp"
+#include "m9312.hpp"
 #include "cpu.hpp"
 
 /*** handle loading of memory content  from macro-11 listing ***/
 static char memory_filename[PATH_MAX + 1];
 
-// entry_label is program start, tpyically "start"
+// entry_label is program start, typically "start"
 // format: 0 = macrop11, 1 = papertape
 static void load_memory(memory_fileformat_t format, char *fname, const char *entry_label) {
+	codelabel_map_c codelabels ;
 	uint32_t firstaddr, lastaddr;
+	uint32_t entry_address = MEMORY_ADDRESS_INVALID ;
+
 	bool load_ok;
 	bool timeout;
 	switch (format) {
 	case fileformat_macro11_listing:
-		load_ok = membuffer->load_macro11_listing(fname, entry_label);
+		load_ok = membuffer->load_macro11_listing(fname, &codelabels);
+		if (codelabels.is_defined(entry_label))
+			entry_address = codelabels.get_address(entry_label) ;
 		break;
 	case fileformat_papertape:
-		load_ok = membuffer->load_papertape(fname);
+		load_ok = membuffer->load_papertape(fname, &codelabels);
+		if (codelabels.size() > 0)
+			entry_address = codelabels.begin()->second;
 		break;
 	default:
 		load_ok = false;
@@ -82,12 +90,12 @@ static void load_memory(memory_fileformat_t format, char *fname, const char *ent
 				fname, membuffer->get_word_count(), firstaddr, lastaddr);
 		if (entry_label == NULL)
 			printf("  No entry address label.\n");
-		else if (membuffer->entry_address != MEMORY_ADDRESS_INVALID)
+		else if (entry_address != MEMORY_ADDRESS_INVALID)
 			printf("  Entry address at \"%s\" label is %06o.\n", entry_label,
-					membuffer->entry_address);
+					entry_address);
 		else
 			printf("  No entry address at \"%s\" label is %06o.\n", entry_label,
-					membuffer->entry_address);
+					entry_address);
 		unibus->mem_write(membuffer->data.words, firstaddr, lastaddr,
 				&timeout);
 		if (timeout)
@@ -165,6 +173,9 @@ void application_c::menu_devices(const char *menu_code, bool with_emulated_CPU) 
 	DL11->rs232adapter.baudrate = DL11->baudrate.value; // limit speed of injected chars
 
 	ltc_c *LTC = new ltc_c();
+
+	m9312_c *m9312 = new m9312_c();
+
 
 //	//demo_regs.install();
 //	//demo_regs.worker_start();
@@ -460,7 +471,7 @@ void application_c::menu_devices(const char *menu_code, bool with_emulated_CPU) 
 					printf("EXAM %06o -> %06o\n", addr, wordbuffer);
 				} else if (n_fields == 1 && unibuscontroller) { // list all regs
 					unsigned wordcount = 0; // default: no EXAM
-					uint16_t wordbuffer[MAX_REGISTERS_PER_DEVICE];
+					uint16_t wordbuffer[MAX_IOPAGE_REGISTERS_PER_DEVICE];
 					addr = unibuscontroller->base_addr.value; // all device registers
 					wordcount = unibuscontroller->register_count;
 					if (wordcount) {
@@ -552,6 +563,10 @@ void application_c::menu_devices(const char *menu_code, bool with_emulated_CPU) 
 		cpu->enabled.set(false);
 		delete cpu;
 	}
+
+	m9312->enabled.set(false) ;
+	delete m9312 ;
+
 
 	LTC->enabled.set(false);
 	delete LTC;

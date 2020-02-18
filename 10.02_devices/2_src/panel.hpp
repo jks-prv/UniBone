@@ -114,7 +114,7 @@ public:
 	// background worker function
 	void worker(unsigned instance) override;
 
-	void on_power_changed(void) override; // must implement
+	void on_power_changed(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge) override; // must implement
 	void on_init_changed(void) override; // must implement
 
 	void clear_all_outputs(void);

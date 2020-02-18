@@ -51,6 +51,13 @@ public:
 // sets device register values depending on internal status,
 // reacts on register read/write over UNIBUS by evaluation of PRU events.
 class device_c: public logsource_c, public parameterized_c {
+public:
+enum signal_edge_enum {
+	SIGNAL_EDGE_NONE, SIGNAL_EDGE_RAISING, SIGNAL_EDGE_FALLING
+};
+
+
+
 private:
 	void workers_start(void);
 	void workers_stop(void);
@@ -107,8 +114,7 @@ public:
 	static device_c *find_by_name(char *name);
 
 	// a device can be powered down. use this to define power-up values
-	volatile bool power_down;
-	virtual void on_power_changed(void) = 0; // reset device, UNIBUS DC_LO
+	virtual void on_power_changed(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge) = 0; // reset device, UNIBUS DC_LO
 
 	// every device has a INIT signal, which can be active (asserted) or inactive
 	// set/release device from INIT state

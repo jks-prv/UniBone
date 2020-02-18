@@ -96,7 +96,7 @@
 // range in which to respond to non-register DATI/DATO accesses
 // entries in page table
 #define PAGE_IGNORE	0	// UniBone does not respond to addresses in this page
-#define PAGE_MEMORY	1	// UNibone meualtes memory for this page
+#define PAGE_MEMORY	1	// UniBone emulates memory for this page
 #define PAGE_IO		2	// addr in IO page, further check requires
 
 #define PAGE_SIZE	8192	// 1 page = 8KB. (size of uiopage)
@@ -110,13 +110,17 @@
 	(deviceregisters).iopage_register_handles[((addr)& 017777)/ 2]
 
 // # of device registers supported. Limited by PRU RAM size and handle type = uint8_t
-#define MAX_REGISTER_COUNT	0x100
+#define MAX_IOPAGE_REGISTER_COUNT	0xff	// valid handles 1..0xfe
+// this IOpage address is implemented as ROM, backed by DDR RAM
+#define IOPAGE_REGISTER_HANDLE_ROM	0xff
 
-#define MAX_REGISTERS_PER_DEVICE MAX_REGISTER_COUNT
-// #define MAX_REGISTERS_PER_DEVICE 32 // RK611 has the most?
+#define MAX_IOPAGE_REGISTERS_PER_DEVICE MAX_IOPAGE_REGISTER_COUNT
+// #define MAX_IOPAGE_REGISTERS_PER_DEVICE 32 // RK611 has the most?
+
+
 #define MAX_DEVICE_HANDLE	255 // 0 not used, must fit in 8bits
 
-// Bitmask: Create event fpr iopagergister DATI/DATO access ?
+// Bitmask: Create event for iopageregister DATI/DATO access ?
 #define IOPAGEREGISTER_EVENT_FLAG_DATI	0x01
 #define IOPAGEREGISTER_EVENT_FLAG_DATO	0x02
 
@@ -144,6 +148,7 @@ typedef struct {
 	// Else indexing the record array requires multiplication,
 	// which can last 4,6 us !!!
 	uint8_t dummy; // fill up to 2+2+1+1+2 = 8 byte record size
+	// bus_flags: 0x01 = ignore DATO, 
 } iopageregister_t;
 
 typedef struct {
@@ -155,12 +160,13 @@ typedef struct {
 	// for every even address in the IOPage:
 	// handle of a device register descriptor,
 	// handle == 0 if address not used
+	// handle == 0xff if address is ROM
 	uint8_t iopage_register_handles[0x1000]; // 4k entries for 8k bytes
 
-	// array of 255 register, index by register handles
-	// handle 0 not used
-	iopageregister_t registers[MAX_REGISTER_COUNT];
-	// sizeof(iopageregister_t) == "power of 2"!
+	// array of 254 register, indexed by register handles
+	// handle 0 not used, 0xff = ROM=>DDR RAM
+ 	iopageregister_t registers[MAX_IOPAGE_REGISTER_COUNT];
+	// sizeof(iopageregister_t) == "power of 2", index calculation!
 
 } iopageregisters_t;
 // must fit in 8K PRU0 RAM

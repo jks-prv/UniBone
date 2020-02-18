@@ -95,6 +95,7 @@ OBJECTS = $(OBJDIR)/application.o	\
 	$(OBJDIR)/devexer.o	\
 	$(OBJDIR)/devexer_rl.o	\
 	$(OBJDIR)/memoryimage.o	\
+	$(OBJDIR)/rom.o	\
 	$(OBJDIR)/cpu.o	\
 	$(OBJDIR)/ka11.o	\
 	$(OBJDIR)/rl0102.o	\
@@ -107,6 +108,7 @@ OBJECTS = $(OBJDIR)/application.o	\
 	$(OBJDIR)/rs232.o \
 	$(OBJDIR)/rs232adapter.o \
 	$(OBJDIR)/dl11w.o \
+	$(OBJDIR)/m9312.o \
 	$(OBJDIR)/storagedrive.o	\
     $(OBJDIR)/storagecontroller.o	\
     $(OBJDIR)/demo_io.o	\
@@ -206,6 +208,9 @@ $(OBJDIR)/menu_ddrmem_slave_only.o :  menu_ddrmem_slave_only.cpp application.hpp
 $(OBJDIR)/memoryimage.o :  $(BASE_SRC_DIR)/memoryimage.cpp $(BASE_SRC_DIR)/memoryimage.hpp
 	$(CC) $(CCFLAGS) $< -o $@
 
+$(OBJDIR)/rom.o :  $(DEVICE_SRC_DIR)/rom.cpp $(DEVICE_SRC_DIR)/rom.hpp
+	$(CC) $(CCFLAGS) $< -o $@
+
 $(OBJDIR)/devexer.o :  $(DEVEXER_SRC_DIR)/devexer.cpp $(DEVEXER_SRC_DIR)/devexer.hpp
 	$(CC) $(CCFLAGS) $< -o $@
 
@@ -246,6 +251,9 @@ $(OBJDIR)/rs232adapter.o :  $(DEVICE_SRC_DIR)/rs232adapter.cpp $(DEVICE_SRC_DIR)
 	$(CC) $(CCFLAGS) $< -o $@
 
 $(OBJDIR)/dl11w.o :  $(DEVICE_SRC_DIR)/dl11w.cpp $(DEVICE_SRC_DIR)/dl11w.hpp
+	$(CC) $(CCFLAGS) $< -o $@
+
+$(OBJDIR)/m9312.o :  $(DEVICE_SRC_DIR)/m9312.cpp $(DEVICE_SRC_DIR)/m9312.hpp
 	$(CC) $(CCFLAGS) $< -o $@
 
 $(OBJDIR)/storagedrive.o :  $(BASE_SRC_DIR)/storagedrive.cpp $(BASE_SRC_DIR)/storagedrive.hpp

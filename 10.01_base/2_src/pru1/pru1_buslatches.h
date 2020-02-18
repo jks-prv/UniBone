@@ -46,6 +46,11 @@ typedef struct {
 
 #ifndef _BUSLATCH_C_
 extern buslatches_t buslatches;
+// Set certain ADDR lines to const "1"-levels
+// Needed for M9312 boot logic
+extern uint32_t address_overlay ;
+
+
 #endif
 
 /*

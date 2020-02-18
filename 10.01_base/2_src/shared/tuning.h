@@ -1,6 +1,6 @@
 /* tuning.h: Constants to adapt UNIBUS functions
 
- Copyright (c) 2019, Joerg Hoppe
+ Copyright (c) 2019-2020, Joerg Hoppe
  j_hoppe@t-online.de, www.retrocmp.com
 
  Permission is hereby granted, free of charge, to any person obtaining a
@@ -35,9 +35,9 @@
 // #define BUSLATCHES_GETBYTE_DELAY	10	// Standard
 #if defined(TUNING_PCB_TEST)
 // experimental to test error rates
-#define BUSLATCHES_GETBYTE_DELAY	7
-#define BUSLATCHES_SETBITS_DELAY	0
-#define BUSLATCHES_SETBYTE_DELAY	0
+#define BUSLATCHES_GETBYTE_DELAY	9
+#define BUSLATCHES_SETBITS_DELAY	3
+#define BUSLATCHES_SETBYTE_DELAY	3
 
 #elif defined(TUNING_PCB_LEGACY_SECURE)
 /* Secure setting for PCBs <= 2018-12, delivered before June 2019.

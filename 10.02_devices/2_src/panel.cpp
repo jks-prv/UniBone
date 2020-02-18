@@ -253,7 +253,9 @@ void paneldriver_c::reset(void) {
 	enabled.set(true); // worker_start();
 }
 
-void paneldriver_c::on_power_changed(void) {
+void paneldriver_c::on_power_changed(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge) {
+	UNUSED(aclo_edge) ;
+	UNUSED(dclo_edge) ;
 }
 
 void paneldriver_c::on_init_changed(void) {

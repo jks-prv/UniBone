@@ -98,7 +98,9 @@ public:
 	}
 
 	// fill abstracts
-	virtual void on_power_changed(void) {
+	virtual void on_power_changed(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge) {
+		UNUSED(aclo_edge) ;
+		UNUSED(dclo_edge) ;
 	}
 	virtual void on_init_changed(void) {
 	}
