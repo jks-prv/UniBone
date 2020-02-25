@@ -1,6 +1,6 @@
 /* mailbox.h: Command and status data structures common to ARM and PRU
 
- Copyright (c) 2018, Joerg Hoppe
+ Copyright (c) 2018-2020, Joerg Hoppe
  j_hoppe@t-online.de, www.retrocmp.com
 
  Permission is hereby granted, free of charge, to any person obtaining a
@@ -54,7 +54,7 @@
 
 
 
-// signal IDs for ARM2PRU_INITALIZATIONSIGNAL_* 
+// signal IDs for ARM2PRU_INITALIZATIONSIGNAL_*
 // states of initialization section lines. Bitmask = latch[7]
 #define INITIALIZATIONSIGNAL_INIT	(1 << 3)
 #define INITIALIZATIONSIGNAL_ACLO	(1 << 4)
@@ -123,7 +123,7 @@ typedef struct {
 	uint16_t val; // value set/get.
 } mailbox_initializationsignal_t;
 
-// data for bus arbitrator 
+// data for bus arbitrator
 typedef struct {
 	// ifs = Interrupt Fielding Processor
 	uint8_t ifs_priority_level; // Priority level of CPU, visible in PSW. 7,6,5,4 <4.
@@ -143,7 +143,7 @@ typedef struct {
 	uint16_t wordcount; // # of remaining words transmit/receive, static
 	// ---dword---
 	uint8_t	cpu_access ; // 0 for device DMA, 1 for emulated CPU
-	uint8_t	dummy[3] ; 
+	uint8_t	dummy[3] ;
 	// ---dword---
 	uint32_t cur_addr; // current address in transfer, if timeout: offending address.
 	// if complete: last address accessed.
@@ -299,7 +299,7 @@ typedef struct {
 		uint32_t cpu_enable;
 	};
 
-    // possibly not aligned to 32 bit here 
+    // possibly not aligned to 32 bit here
 } mailbox_t;
 
 #ifdef ARM
