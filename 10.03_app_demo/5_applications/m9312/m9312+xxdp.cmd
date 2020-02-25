@@ -42,10 +42,11 @@ p runstopbutton 0	# released: "LOAD"
 p powerswitch 1		# power on, now in "load" state
 p image xxdp25.rl02 	# mount image file with test pattern
 #p runstopbutton 1	# press RUN/STOP, will start
-p                       # show all params of RL1
+p                       # show all params of RL0
 
 pwr			# reboot
-.wait 1000		# wait for PDP-11 to reset
+.wait 1000		# wait for PDP-11 to boot
+# Do not issue DMA-like accesses for 300ms, M9312 manipulates ADDR lines after ACLO
 .print DL bootloader waiting for drive to become READY.
 m i			# install max UNIBUS memory, CPU running now
 
