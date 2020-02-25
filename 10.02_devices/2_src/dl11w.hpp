@@ -148,6 +148,9 @@ public:
 	slu_c();
 	~slu_c();
 
+	bool on_before_install(void) override ;
+	void on_after_uninstall(void) override ;
+
 	//parameter_string_c   ip_host = parameter_string_c(  this, "SLU socket IP host", "host", /*readonly*/ false, "ip hostname");
 	//parameter_unsigned_c ip_port = parameter_unsigned_c(this, "SLU socket IP serialport", "serialport", /*readonly*/ false, "", "%d", "ip serialport", 32, 10);
 	parameter_string_c serialport = parameter_string_c(this, "serialport", "p", /*readonly*/
@@ -178,7 +181,7 @@ public:
 			override;
 
 	bool on_param_changed(parameter_c *param) override;  // must implement
-	void on_power_changed(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge) override;
+	void on_power_changed(signal_edge_enum aclo_edge, signal_edge_enum dclo_edge) override;
 	void on_init_changed(void) override;
 };
 
@@ -217,7 +220,7 @@ public:
 			override;
 
 	bool on_param_changed(parameter_c *param) override;  // must implement
-	void on_power_changed(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge) override;
+	void on_power_changed(signal_edge_enum aclo_edge, signal_edge_enum dclo_edge) override;
 	void on_init_changed(void) override;
 };
 

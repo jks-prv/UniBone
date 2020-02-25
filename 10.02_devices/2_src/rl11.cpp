@@ -193,16 +193,20 @@ RL11_c::~RL11_c() {
 		delete storagedrives[i];
 }
 
+// called when "enabled" goes true, before registers plugged to UNIBUS
+// result false: configuration error, do not install
+bool RL11_c::on_before_install() {
+	connect_to_panel();
+	return true ;
+}
+
+void RL11_c::on_after_uninstall() {
+	disconnect_from_panel();
+}
+
+
 bool RL11_c::on_param_changed(parameter_c *param) {
-	if (param == &enabled) {
-		if (enabled.new_value) {
-			// enabled
-			connect_to_panel();
-		} else {
-			// disabled
-			disconnect_from_panel();
-		}
-	} else if (param == &priority_slot) {
+	if (param == &priority_slot) {
 		dma_request.set_priority_slot(priority_slot.new_value);
 		intr_request.set_priority_slot(priority_slot.new_value);
 	} else if (param == &intr_level) {
@@ -473,11 +477,12 @@ void RL11_c::on_after_register_access(unibusdevice_register_t *device_reg,
 	// now SSYN goes inactive !
 }
 
-void RL11_c::on_power_changed(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge) {
+// after UNIBUS install, device is reset by DCLO cycle
+void RL11_c::on_power_changed(signal_edge_enum aclo_edge, signal_edge_enum dclo_edge) {
 	// storagecontroller_c forwards to drives
 	storagecontroller_c::on_power_changed(aclo_edge, dclo_edge);
 
-	if (dclo_edge == device_c::SIGNAL_EDGE_RAISING) {
+	if (dclo_edge == SIGNAL_EDGE_RAISING) {
 		// power-on - defaults
 		reset();
 		// but I need a valid state before that.

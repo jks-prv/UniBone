@@ -103,6 +103,9 @@ public:
 	RL11_c(void);
 	~RL11_c(void);
 
+	bool on_before_install(void) override ;
+	void on_after_uninstall(void) override ;
+
 	bool on_param_changed(parameter_c *param) override;
 
 	void reset(void);
@@ -117,7 +120,7 @@ public:
 	void on_after_register_access(unibusdevice_register_t *device_reg, uint8_t unibus_control)
 			override;
 
-	void on_power_changed(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge) override;
+	void on_power_changed(signal_edge_enum aclo_edge, signal_edge_enum dclo_edge) override;
 	void on_init_changed(void) override;
 	void on_drive_status_changed(storagedrive_c *drive);
 };

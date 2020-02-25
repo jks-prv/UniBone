@@ -34,18 +34,21 @@
 class unibuscpu_c: public unibusdevice_c {
 	public:
 			unibuscpu_c(): unibusdevice_c() {
-				power_event = power_event_none ;
+				power_event_ACLO_active = power_event_ACLO_inactive = power_event_DCLO_active = false ;
 				} ;
 
-	enum power_event_enum   {power_event_none, power_event_up, power_event_down} ;
-	
-	enum power_event_enum power_event ;
+//	enum power_event_enum   {power_event_none, power_event_ACLO_active, power_event_ACLO_inactive, power_event_DCLO_active} ;
+
+	bool power_event_ACLO_active ;
+	bool power_event_DCLO_active ;
+	bool power_event_ACLO_inactive ;
+//	enum power_event_enum power_event ;
 		
 	// called by PRU on INTR, returns new priority level
 	virtual void on_interrupt(uint16_t vector) = 0 ;
 
 	
-	virtual void on_power_changed(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge) ;
+	virtual void on_power_changed(signal_edge_enum aclo_edge, signal_edge_enum dclo_edge) ;
 	virtual void on_init_changed(void) ;
 };
 

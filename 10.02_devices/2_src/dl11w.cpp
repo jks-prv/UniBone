@@ -113,37 +113,44 @@ slu_c::slu_c() :
 slu_c::~slu_c() {
 }
 
+// called when "enabled" goes true, before registers plugged to UNIBUS
+// result false: configuration error, do not install
+bool slu_c::on_before_install(void) {
+	// enable SLU: setup COM serial port
+	// setup for BREAK and parity evaluation
+	rs232adapter.rcv_termios_error_encoding = true;
+	if (rs232.OpenComport(serialport.value.c_str(), baudrate.value, mode.value.c_str(),
+	true)) {
+		ERROR("Can not open serial port %s", serialport.value.c_str());
+		return false; // reject "enable"
+	}
+	
+	// lock serial port and settings
+	serialport.readonly = true;
+	baudrate.readonly = true;
+	mode.readonly = true;
+	
+	INFO("Serial port %s opened", serialport.value.c_str());
+	char buff[256];
+	sprintf(buff, "\n\rSerial port %s opened\n\r", serialport.value.c_str());
+	rs232.cputs(buff);
+	
+	return true ;
+}
+
+void slu_c::on_after_uninstall(void) {
+	// disable SLU
+	rs232.CloseComport();
+	// unlock serial port and settings
+	serialport.readonly = false;
+	baudrate.readonly = false;
+	mode.readonly = false;
+	INFO("Serial port %s closed", serialport.value.c_str());
+}
+
+
 bool slu_c::on_param_changed(parameter_c *param) {
-	if (param == &enabled) {
-		if (enabled.new_value) {
-			// enable SLU: setup COM serial port
-			// setup for BREAK and parity evaluation
-			rs232adapter.rcv_termios_error_encoding = true;
-			if (rs232.OpenComport(serialport.value.c_str(), baudrate.value, mode.value.c_str(),
-			true)) {
-				ERROR("Can not open serial port %s", serialport.value.c_str());
-				return false; // reject "enable"
-			}
-
-			// lock serial port and settings
-			serialport.readonly = true;
-			baudrate.readonly = true;
-			mode.readonly = true;
-
-			INFO("Serial port %s opened", serialport.value.c_str());
-			char buff[256];
-			sprintf(buff, "\n\rSerial port %s opened\n\r", serialport.value.c_str());
-			rs232.cputs(buff);
-		} else {
-			// disable SLU
-			rs232.CloseComport();
-			// unlock serial port and settings
-			serialport.readonly = false;
-			baudrate.readonly = false;
-			mode.readonly = false;
-			INFO("Serial port %s closed", serialport.value.c_str());
-		}
-	} else if (param == &priority_slot) {
+	if (param == &priority_slot) {
 		rcvintr_request.set_priority_slot(priority_slot.new_value);
 		// XMT INTR: lower priority => nxt slot, and next vector
 		xmtintr_request.set_priority_slot(priority_slot.new_value + 1);
@@ -316,7 +323,8 @@ void slu_c::on_after_register_access(unibusdevice_register_t *device_reg,
 
 }
 
-void slu_c::on_power_changed(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge) {
+// after UNIBUS install, device is reset by DCLO cycle
+void slu_c::on_power_changed(signal_edge_enum aclo_edge, signal_edge_enum dclo_edge) {
 	UNUSED(aclo_edge) ;
 	UNUSED(dclo_edge) ;
 }
@@ -520,7 +528,7 @@ void ltc_c::on_after_register_access(unibusdevice_register_t *device_reg,
 
 	case 0: // LKS
 		if (unibus_control == UNIBUS_CONTROL_DATO) { // bus write
-//DEBUG("LKS wrDATO, val = 0%6o", reg_lks->active_dato_flipflops) ;
+//DEBUG("LKS wrDATO, val = %06o", reg_lks->active_dato_flipflops) ;
 			intr_enable = !!(reg_lks->active_dato_flipflops & LKS_INT_ENB);
 			// schematic: LINE CLOCK MONITOR can only be cleared
 			if ((reg_lks->active_dato_flipflops & LKS_INT_MON) == 0)
@@ -531,7 +539,7 @@ void ltc_c::on_after_register_access(unibusdevice_register_t *device_reg,
 			}
 			set_lks_dati_value_and_INTR(false); // INTR only by clock, not by LKs access
 		} else
-//DEBUG("LKS DATI, control=%d, val = 0%6o = 0%6o", (int)unibus_control, reg_lks->active_dati_flipflops, device_reg->shared_register->value ) ;
+//DEBUG("LKS DATI, control=%d, val = %06o = %06o", (int)unibus_control, reg_lks->active_dati_flipflops, device_reg->shared_register->value ) ;
 			break;
 
 	default:
@@ -541,7 +549,8 @@ void ltc_c::on_after_register_access(unibusdevice_register_t *device_reg,
 
 }
 
-void ltc_c::on_power_changed(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge) {
+// after UNIBUS install, device is reset by DCLO cycle
+void ltc_c::on_power_changed(signal_edge_enum aclo_edge, signal_edge_enum dclo_edge) {
 	UNUSED(aclo_edge) ;
 	UNUSED(dclo_edge) ;
 }

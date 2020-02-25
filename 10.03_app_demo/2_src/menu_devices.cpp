@@ -193,7 +193,7 @@ void application_c::menu_devices(const char *menu_code, bool with_emulated_CPU) 
 	}
 
 	// now devices are "Plugged in". Reset PDP-11.
-	unibus->probe_grant_continuity(true);
+//	unibus->probe_grant_continuity(true);
 
 	while (!ready) {
 

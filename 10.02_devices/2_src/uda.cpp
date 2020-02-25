@@ -843,12 +843,13 @@ uda_c::Interrupt(void)
 // on_power_changed():
 //  Resets the controller and all attached drives.
 //
+// after UNIBUS install, device is reset by DCLO cycle
 void
-uda_c::on_power_changed(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge)
+uda_c::on_power_changed(signal_edge_enum aclo_edge, signal_edge_enum dclo_edge)
 {
     storagecontroller_c::on_power_changed(aclo_edge, dclo_edge);
   
-    if (dclo_edge == device_c::SIGNAL_EDGE_RAISING)
+    if (dclo_edge == SIGNAL_EDGE_RAISING)
     {
         DEBUG("Reset due to power change");
         StateTransition(InitializationStep::Uninitialized);

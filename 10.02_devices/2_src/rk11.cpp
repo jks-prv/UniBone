@@ -1047,11 +1047,12 @@ void rk11_c::reset_controller(void)
         "reset_controller");
 }
 
-void rk11_c::on_power_changed(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge) 
+// after UNIBUS install, device is reset by DCLO cycle
+void rk11_c::on_power_changed(signal_edge_enum aclo_edge, signal_edge_enum dclo_edge) 
 {
     storagecontroller_c::on_power_changed(aclo_edge, dclo_edge);
 
-    if (dclo_edge == device_c::SIGNAL_EDGE_RAISING) 
+    if (dclo_edge == SIGNAL_EDGE_RAISING) 
     { 
         // power-on defaults
         reset_controller();

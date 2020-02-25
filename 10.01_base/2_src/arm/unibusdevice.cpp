@@ -63,12 +63,13 @@ bool unibusdevice_c::on_param_changed(parameter_c *param) {
 	if (param == &enabled) {
 		// plug/unplug device into UNIBUS:
 		if (enabled.new_value) {
+			if (!on_before_install()) // possible callback to device
+				return false ; // device denied enable
 			// enable: lock UNIBUS config
 			base_addr.readonly = true;
 			priority_slot.readonly = true;
 			intr_vector.readonly = true;
 			intr_level.readonly = true;
-			on_before_install() ; // possible callback to device
 			install(); // visible on UNIBUS
 		} else {
 			// disable
@@ -102,15 +103,11 @@ void unibusdevice_c::install(void) {
 	unibusadapter->register_device(*this); // -> device_c ?
 	// now has handle
 
-	// initial power event, 
+	// Reset device by generating DCLO power cycle.
+	// Do not toggle ACLO, meant for run/stop conditions (CPU start, M9312 boot vector redirection)
+	on_power_changed(SIGNAL_EDGE_NONE, SIGNAL_EDGE_RAISING);
 	// ACLO active, DCLO inactive
-	on_power_changed(device_c::SIGNAL_EDGE_RAISING, device_c::SIGNAL_EDGE_NONE);
-	// ACLO active, DCLO active
-	on_power_changed(device_c::SIGNAL_EDGE_NONE, device_c::SIGNAL_EDGE_RAISING);
-	// ACLO active, DCLO inactive
-	on_power_changed(device_c::SIGNAL_EDGE_NONE, device_c::SIGNAL_EDGE_FALLING);
-	// ACLO inactive, DCLO inactive
-	on_power_changed(device_c::SIGNAL_EDGE_FALLING, device_c::SIGNAL_EDGE_NONE);
+	on_power_changed(SIGNAL_EDGE_NONE, SIGNAL_EDGE_FALLING);
 }
 
 void unibusdevice_c::uninstall(void) {

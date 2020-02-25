@@ -26,24 +26,30 @@
 
 #include "unibuscpu.hpp"
 
-void unibuscpu_c::on_power_changed(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge) {
+// after UNIBUS install, device is reset by DCLO cycle
+void unibuscpu_c::on_power_changed(signal_edge_enum aclo_edge, signal_edge_enum dclo_edge) {
 	// called within a bus_cycle, and initiates other cycles?!
 	// Emulation of old behaviour
-	if (dclo_edge == device_c::SIGNAL_EDGE_RAISING) {    
-		INFO("CPU: DCLO failed");
-		power_event = power_event_down;
-//			ka11_pwrdown(&unibone_cpu->ka11);
+	if (aclo_edge == SIGNAL_EDGE_RAISING) {    
+		INFO("CPU: ACLO active");
+		power_event_ACLO_active = true ;
+	} else if (dclo_edge == SIGNAL_EDGE_RAISING) {    
+		INFO("CPU: DCLO active");
+		power_event_DCLO_active = true ;
+//			ka11_pwrfail_trap(&unibone_cpu->ka11);
 		// ACLO failed. 
 			// CPU traps to vector 24 and has 2ms time to execute code
-	} else if (aclo_edge == device_c::SIGNAL_EDGE_FALLING) {
-		INFO("CPU: ACLO restored");
-		power_event = power_event_up;
-//			ka11_pwrup(&unibone_cpu->ka11);
+	} else if (aclo_edge == SIGNAL_EDGE_FALLING) {
+		INFO("CPU: ACLO inactive");
+		 power_event_ACLO_inactive = true;
+//			ka11_pwrup_vector_fetch(&unibone_cpu->ka11);
 		// DCLO restored
 		// CPU loads PC and PSW from vector 24 
 		// if HALTed: do nothing, user is expected to setup PC and PSW ?
-	} else
-		power_event = power_event_none ;
+	} 
+// cleared only by cpu after processing	
+// else power_event = power_event_none ;
+		
 /*	 	
 		
 

@@ -287,6 +287,8 @@ typedef struct {
 
 	mailbox_dma_t dma;
 
+	uint32_t address_overlay;
+
 	// data structs for misc. opcodes
 	union {
 		mailbox_test_t mailbox_test;
@@ -295,8 +297,9 @@ typedef struct {
 		mailbox_buslatch_exerciser_t buslatch_exerciser;
 		mailbox_initializationsignal_t initializationsignal;
 		uint32_t cpu_enable;
-		uint32_t address_boot_vector;
 	};
+
+    // possibly not aligned to 32 bit here 
 } mailbox_t;
 
 #ifdef ARM

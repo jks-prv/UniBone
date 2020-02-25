@@ -114,8 +114,6 @@ m9312_c::m9312_c() :
 	bootaddress = MEMORY_ADDRESS_INVALID;
 	bootaddress_info.value = "DISABLED";
 
-	bootaddress_active = false;
-
 }
 
 m9312_c::~m9312_c() {
@@ -257,7 +255,8 @@ bool m9312_c::on_param_changed(parameter_c *param) {
 
 // called when parameter "enabled" goes true
 // registers not yet linked to UNIBUS map.
-void m9312_c::on_before_install() {
+// result false: configuration error, not pluggable
+bool m9312_c::on_before_install() {
 
 	// Check ROM config
 	// console emulator is optional.
@@ -265,12 +264,12 @@ void m9312_c::on_before_install() {
 	// ROM2,3,4 are optional, but must be present in asceding order
 	if (rom[1] == NULL) {
 		ERROR("BOOTROM1 must be plugged in");
-		return;
+		return false;
 	}
 	for (int i = 2; i < 5; i++)
 		if (rom[i] != NULL && rom[i - 1] == NULL) {
 			WARNING("BOOTROM sockets not populated in ascending order: %u missing", i - 1);
-			return;
+			return false;
 		}
 
 	if (!bootaddress_label.value.empty() && bootaddress == MEMORY_ADDRESS_INVALID) {
@@ -290,9 +289,8 @@ void m9312_c::on_before_install() {
 	bootrom3_filepath.readonly = true;
 	bootrom4_filepath.readonly = true;
 	bootaddress_label.readonly = true;
-
-	bootaddress_active = false;
-
+	
+	return true ;
 }
 
 // called when parameter "enabled" goes false
@@ -321,7 +319,7 @@ void m9312_c::worker(unsigned instance) {
 	while (!workers_terminate) {
 		// poll BOOT vector ADDR timout
 		timeout.wait_ms(50);
-		if (bootaddress_active) {
+		if (unibus->is_address_overlay_active()) {
 			// start timeout
 			if (unibusadapter->line_ACLO) {
 				// timer starts running when ACLO goes inactive
@@ -338,10 +336,8 @@ void m9312_c::worker(unsigned instance) {
 // set UNIBUS ADDR lines to boot vector address overlay
 void m9312_c::bootaddress_set() {
 	if (bootaddress != MEMORY_ADDRESS_INVALID) {
-		mailbox->address_boot_vector = 0773000; //bootaddress;
-		mailbox_execute (ARM2PRU_ADDRESS_OVERLAY);
+		unibus->set_address_overlay(0773000) ;
 		DEBUG("bootaddress_set");
-		bootaddress_active = true;
 		// remove vector after 300ms, if no  access to PC/PSW at 773024/26
 		bootaddress_timeout.start_ms(bootaddress_timeout_ms);
 		bootaddress_reg_trap_accesses = 0;
@@ -350,11 +346,9 @@ void m9312_c::bootaddress_set() {
 
 // remove boot vector address overlay from UNIBUS ADDR lines
 void m9312_c::bootaddress_clear() {
-	if (bootaddress_active) {
-		mailbox->address_boot_vector = 0;
-		mailbox_execute (ARM2PRU_ADDRESS_OVERLAY);
+	if (unibus->is_address_overlay_active()) {
+		unibus->set_address_overlay(0) ;
 		DEBUG("bootaddress_clr_event");
-		bootaddress_active = false;
 	}
 }
 
@@ -372,7 +366,7 @@ void m9312_c::on_after_register_access(unibusdevice_register_t *device_reg,
 	// the value of reg_trap_PC and reg_trap_PSW never change at runtime.
 	// just count MSYNs
 
-	if (!bootaddress_active)
+	if (!unibus->is_address_overlay_active())
 		return;
 
 	// bootring CPU accesses PC and PSW, then remove the boot vector
@@ -383,12 +377,13 @@ void m9312_c::on_after_register_access(unibusdevice_register_t *device_reg,
 	}
 }
 
-void m9312_c::on_power_changed(device_c::signal_edge_enum aclo_edge,
-		device_c::signal_edge_enum dclo_edge) {
+// after UNIBUS install, device is reset by DCLO cycle
+void m9312_c::on_power_changed(signal_edge_enum aclo_edge,
+		signal_edge_enum dclo_edge) {
 	UNUSED(dclo_edge);
-	// !!! Detection of ACLO edges appears delayed against MSYN/SSYN activity
-	// !!!
-	if (aclo_edge == unibusadapter_c::SIGNAL_EDGE_RAISING) { // ACLO leading edge: set BOOT vector ADDR
+	// !!! Detection of ACLO edges appears delayed against MSYN/SSYN activity,
+	// so don't use "ACLO edge falling"
+	if (aclo_edge == SIGNAL_EDGE_RAISING) { // ACLO leading edge: set BOOT vector ADDR
 		DEBUG("ACLO asserted");
 		bootaddress_set();
 	}
@@ -396,10 +391,10 @@ void m9312_c::on_power_changed(device_c::signal_edge_enum aclo_edge,
 
 // UNIBUS INIT: clear all registers
 void m9312_c::on_init_changed(void) {
-	// write all registers to "reset-values"
-	if (init_asserted) {
-		reset_unibus_registers();
-		INFO("m9312_c::on_init()");
-	}
+//	// write all registers to "reset-values"
+//	if (init_asserted) {
+//		reset_unibus_registers();
+//		INFO("m9312_c::on_init()");
+//	}
 }
 
