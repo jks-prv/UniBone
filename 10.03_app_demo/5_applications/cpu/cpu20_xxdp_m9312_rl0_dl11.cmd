@@ -43,8 +43,11 @@ sd cpu20
 p h 0			# release HALT switch
 
 pwr
+<<<<<<< HEAD
 # Do not issue DMA-like accesses for 300ms, M9312 manipulates ADDR lines after ACLO
 
+=======
+>>>>>>> e95d9ad958f7dcde08fdefc4f0d54148ffb8e561
 
 .print M9312 boot rom installed.
 .print "Serial echo" program loaded at memory 1000.
