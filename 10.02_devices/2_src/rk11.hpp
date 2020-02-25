@@ -161,6 +161,7 @@ public:
     rk11_c();
     virtual ~rk11_c();    
 
+
     // background worker function
     void worker(unsigned instance) override;
 
@@ -171,7 +172,7 @@ public:
 
 	bool on_param_changed(parameter_c *param) override;
 
-    void on_power_changed(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge) override;
+    void on_power_changed(signal_edge_enum aclo_edge, signal_edge_enum dclo_edge) override;
     void on_init_changed(void) override;
   
     void on_drive_status_changed(storagedrive_c* drive);

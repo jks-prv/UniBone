@@ -109,11 +109,12 @@ uint16_t RL0102_c::calc_crc(const int wc, const uint16_t *data) {
 	return (uint16_t) crc;
 }
 
-void RL0102_c::on_power_changed(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge) {
+// after UNIBUS install, device is reset by DCLO cycle
+void RL0102_c::on_power_changed(signal_edge_enum aclo_edge, signal_edge_enum dclo_edge) {
 	UNUSED(aclo_edge) ;
 	// called at high priority.
 	// mutex?
-	if (dclo_edge == device_c::SIGNAL_EDGE_RAISING) {
+	if (dclo_edge == SIGNAL_EDGE_RAISING) {
 		// FAULT lamp, while RL11 evals DC_LO
 		// power-on defaults
 		change_state( RL0102_STATE_power_off);

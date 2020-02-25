@@ -111,7 +111,8 @@ bool unibusadapter_c::on_param_changed(parameter_c *param) {
 	return device_c::on_param_changed(param); // more actions (for enable)
 }
 
-void unibusadapter_c::on_power_changed(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge) {
+// after UNIBUS install, device is reset by DCLO cycle
+void unibusadapter_c::on_power_changed(signal_edge_enum aclo_edge, signal_edge_enum dclo_edge) {
 	UNUSED(aclo_edge) ;
 	UNUSED(dclo_edge) ;
 }
@@ -478,7 +479,7 @@ void unibusadapter_c::request_execute_active_on_PRU(unsigned level_index) {
 		// signal still not cleared in worker() while processing this
 		// assert(mailbox->events.event_dma == 0); // previous signal must have been processed
 		_DEBUG(
-				"request_execute_active_on_PRU() DMA: dev %s, ->active = dma_request %p, start = 0%06o, control=%u, wordcount=%u, data=0%06o ...",
+				"request_execute_active_on_PRU() DMA: dev %s, ->active = dma_request %p, start = %06o, control=%u, wordcount=%u, data=%06o ...",
 				dmareq->device ? dmareq->device->name.value.c_str() : "none", dmareq,
 				mailbox->dma.startaddr, (unsigned) mailbox->dma.control,
 				(unsigned) mailbox->dma.wordcount, (unsigned) mailbox->dma.words[0]);
@@ -588,6 +589,9 @@ void unibusadapter_c::DMA(dma_request_c& dma_request, bool blocking, uint8_t uni
 	// lowest priority reserved for CPU
 	assert(!dma_request.is_cpu_access || dma_request.priority_slot == 31);
 
+	if (!dma_request.is_cpu_access && unibus->is_address_overlay_active()) 
+		ERROR("UNIBUS ADDR lines overlayed (for M9312 boot) @ %06o. Only CPU 24/26 access intended!", unibus_addr) ;
+
 	// ignore calls if INIT condition
 	if (line_INIT) {
 		dma_request.complete = true;
@@ -651,7 +655,9 @@ void unibusadapter_c::DMA(dma_request_c& dma_request, bool blocking, uint8_t uni
 				worker_device_dma_chunk_complete_event(); // do not signal, uses complete_mutex
 				EVENT_ACK(*mailbox, dma);
 				completed = true;
-			}
+			} else if (activereq == NULL)
+				// request aborted by worker_power_event()
+				completed = true;
 			pthread_mutex_unlock(&requests_mutex); //&dma_request.complete_mutex);
 		} while (!completed);
 //ARM_DEBUG_PIN1(0); // CPU20 performace
@@ -850,7 +856,7 @@ void unibusadapter_c::worker_init_event() {
 	pthread_mutex_unlock(&requests_mutex);
 }
 
-void unibusadapter_c::worker_power_event(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge) {
+void unibusadapter_c::worker_power_event(signal_edge_enum aclo_edge, signal_edge_enum dclo_edge) {
 	unsigned device_handle;
 	unibusdevice_c *device;
 	// notify device on change of ACLO/DCLO lines
@@ -860,12 +866,15 @@ void unibusadapter_c::worker_power_event(device_c::signal_edge_enum aclo_edge, d
 			device->on_power_changed(aclo_edge, dclo_edge);
 		}
 
-	// Clear bus request queues,
-	pthread_mutex_lock(&requests_mutex);
-	requests_cancel_scheduled();
-	// reset all scheduled tables, also requests on PRU
-	requests_init();
-	pthread_mutex_unlock(&requests_mutex);
+	// in true power fail, terminate pending DMA/CPU transfer
+	if (dclo_edge == SIGNAL_EDGE_RAISING) {
+		// Clear bus request queues,
+		pthread_mutex_lock(&requests_mutex);
+		requests_cancel_scheduled();
+		// reset all scheduled tables, also requests on PRU
+		requests_init();
+		pthread_mutex_unlock(&requests_mutex);
+		}
 }
 
 // process DATI/DATO access to active device registers
@@ -1091,8 +1100,8 @@ void unibusadapter_c::worker(unsigned instance) {
 			// critical a mix of INIT and DATI/DATO: RESET and register access follow directly
 			// But no DATI/DATO occurs while INIT active. So reconstruct event order by
 			// processing order: INIT_DEASSERT, DATI/O, INIT_ASSERT, DCLO/ACLO
-			device_c::signal_edge_enum aclo_edge = device_c::SIGNAL_EDGE_NONE ;
-			device_c::signal_edge_enum dclo_edge = device_c::SIGNAL_EDGE_NONE ;
+			signal_edge_enum aclo_edge = SIGNAL_EDGE_NONE ;
+			signal_edge_enum dclo_edge = SIGNAL_EDGE_NONE ;
 			bool init_raising_edge = false;
 			bool init_falling_edge = false;
 			if (!EVENT_IS_ACKED(*mailbox, init)) {
@@ -1114,20 +1123,20 @@ void unibusadapter_c::worker(unsigned instance) {
 				any_event = true;
 				if (mailbox->events.init_signals_cur & INITIALIZATIONSIGNAL_DCLO) {
 					if (!line_DCLO)
-						dclo_edge = device_c::SIGNAL_EDGE_RAISING ;
+						dclo_edge = SIGNAL_EDGE_RAISING ;
 					line_DCLO = true;
 				} else {
 					if (line_DCLO)
-						dclo_edge = device_c::SIGNAL_EDGE_FALLING ;
+						dclo_edge = SIGNAL_EDGE_FALLING ;
 					line_DCLO = false;
 				}
 				if (mailbox->events.init_signals_cur & INITIALIZATIONSIGNAL_ACLO) {
 					if (!line_ACLO)
-						aclo_edge =  device_c::SIGNAL_EDGE_RAISING  ;
+						aclo_edge =  SIGNAL_EDGE_RAISING  ;
 					line_ACLO = true;
 				} else {
 					if (line_ACLO)
-						aclo_edge = device_c::SIGNAL_EDGE_FALLING;
+						aclo_edge = SIGNAL_EDGE_FALLING;
 					line_ACLO = false;
 				}
 				EVENT_ACK(*mailbox, power); // PRU may re-raise and change mailbox now
@@ -1137,7 +1146,7 @@ void unibusadapter_c::worker(unsigned instance) {
 						init_raising_edge, init_falling_edge, (int)aclo_edge, (int)dclo_edge) ;
 
 			}
-			if (aclo_edge != device_c::SIGNAL_EDGE_NONE || dclo_edge != device_c::SIGNAL_EDGE_NONE)
+			if (aclo_edge != SIGNAL_EDGE_NONE || dclo_edge != SIGNAL_EDGE_NONE)
 				worker_power_event(aclo_edge, dclo_edge) ;
 			if (init_falling_edge) // INIT asserted -> deasserted.  DATI/DATO cycle only possible after that.
 				worker_init_event();

@@ -4,16 +4,23 @@ dc			# "device + cpu" test menu
 
 # first, make a serial port.
 sd dl11
-en dl11			# use emulated serial console
 p p ttyS2		# use "UART2 connector, see FAQ
+en dl11			# use emulated serial console
 en kw11			# enable KW11 on DL11-W
 
-pwr
-.wait 3000		# wait for PDP-11 to reset
+sd m9312		# further commands form M9312
+p bl DIAG		# set start label to console emulator entry 765020
+p cer 23-248F1.lst	# plug console emulator ROM into socket
+p br1 23-756A9.lst	# plug RK BOOT ROM into socket1
+p br2 23-751A9.lst	# plug RL BOOT ROM into socket2
+p br3 23-767A9.lst	# plug MSCP DU BOOT ROM into socket3
+p
+en m9312		# online
+
 m i			# install max UNIBUS memory
 
-# Deposit bootloader into memory
-m ll dl.lst
+# Deposit "serial echo" program into memory
+m ll serial.lst
 
 en rl			# enable RL11 controller
 
@@ -24,7 +31,7 @@ p emulation_speed 10	# 10x speed. Load disk in 5 seconds
 # set type to "rl02"
 p runstopbutton 0	# released: "LOAD"
 p powerswitch 1		# power on, now in "load" state
-p image xxdp25.rl02 	# mount image file with test pattern
+p image xxdp25.rl02  	# mount image file with test pattern
 p runstopbutton 1	# press RUN/STOP, will start
 
 .print Disk drive now on track after 5 secs
@@ -33,17 +40,16 @@ p                       # show all params of RL1
 
 en cpu20
 sd cpu20
+p h 0			# release HALT switch
 
-init
+pwr
 
-.print RL drives ready.
-.print RL11 boot loader installed.
-.print Emulated PDP-11/20 CPU will now boot XXDP.
+.print M9312 boot rom installed.
+.print "Serial echo" program loaded at memory 1000.
 .print Serial I/O on simulated DL11 at 177650, RS232 port is UART2.
+.print RL drives ready.
+.print Emulated PDP-11/20 CPU will booted into M93412 console emulator.
 .print Make sure physical CPU is disabled.
-.print Start CPU20 with "p r 1"
-.print Start from 0 or 10000 to boot from drive 0, 10010 for drive 1, ...
-.print Reload with "m ll"
+.print Start "Serial echo" with "@L 1000", "@S"
+.print Boot from RL0 into XXDP with "@DL0"
 
-.input
-p run 1

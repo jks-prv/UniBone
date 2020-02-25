@@ -569,6 +569,7 @@ ri:	TRAP(010);
 ill:	TRAP(4);
 be:	if(cpu->be > 1){
 		printf("double bus error, HALT\n");
+		trace("double bus error, HALT");
 		cpu->state = STATE_HALTED;
 		return;
 	}
@@ -649,7 +650,7 @@ ka11_setintr(KA11 *cpu, unsigned vec)
 // only to be called from ka11_condstep() thread
 
 void
-ka11_pwrdown(KA11 *cpu)
+ka11_pwrfail_trap(KA11 *cpu)
 {
 	cpu->traps |= TRAP_PWR;
 }
@@ -657,8 +658,10 @@ ka11_pwrdown(KA11 *cpu)
 // only to be called from ka11_condstep() thread
 // if locked, will lock DATI and unibus adapter()!
 void
-ka11_pwrup(KA11 *cpu)
+ka11_pwrup_vector_fetch(KA11 *cpu)
 {
+	// caller must have issued reset()
+	// cpu->traps &= ~TRAP_PWR; // no, would be a fix
 	INA(024, PC);
 	INA(024+2, PSW);
 	return ;

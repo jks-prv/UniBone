@@ -295,8 +295,8 @@ typedef struct {
 		mailbox_buslatch_exerciser_t buslatch_exerciser;
 		mailbox_initializationsignal_t initializationsignal;
 		uint32_t cpu_enable;
-		uint32_t address_boot_vector;
 	};
+	uint32_t address_overlay;
 } mailbox_t;
 
 #ifdef ARM

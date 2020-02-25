@@ -39,23 +39,31 @@ storagecontroller_c::storagecontroller_c() :
 storagecontroller_c::~storagecontroller_c() {
 }
 
+// called when "enabled" goes true, before registers plugged to UNIBUS
+// result false: configuration error, do not install
+bool storagecontroller_c::on_before_install(void) {
+	return true ;
+}
+
+void storagecontroller_c::on_after_uninstall(void) {
+	// power/up/down attached drives, then plug to UNIBUS
+	// if disable, disable also the drives ("controller plugged from UNIBUS)")
+	// on enable, leave them disabled (user may decide which to use)
+	for (unsigned i = 0; i < drivecount; i++)
+		storagedrives[i]->enabled.set(false);
+}
+
+
 // implements params, so must handle "change"
 bool storagecontroller_c::on_param_changed(parameter_c *param) {
-	if (param == &enabled) {
-		if (!enabled.new_value)
-			// power/up/down attached drives, then plug to UNIBUS
-			// if disable, disable also the drives ("contreolelr plugged from UNIBUS)")
-			// on enable, leave them disabled (user may decide which to use)
-			for (unsigned i = 0; i < drivecount; i++)
-				storagedrives[i]->enabled.set(false);
-	}
 	return unibusdevice_c::on_param_changed(param); // more actions (for enable)
 }
 
 // forward BUS events to connected storage drives
 
 // drives are powered if controller is powered
-void storagecontroller_c::on_power_changed(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge) {
+// after UNIBUS install, device is reset by DCLO cycle
+void storagecontroller_c::on_power_changed(signal_edge_enum aclo_edge, signal_edge_enum dclo_edge) {
 	vector<storagedrive_c*>::iterator it;
 	for (it = storagedrives.begin(); it != storagedrives.end(); it++) {
 		// drives should evaluate only DCLO for power to simualte wall power.

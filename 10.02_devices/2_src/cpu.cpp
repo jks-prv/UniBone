@@ -86,7 +86,9 @@ int unibone_dato(unsigned addr, unsigned data) {
 	unibusadapter->cpu_DATA_transfer(unibone_cpu->data_transfer_request, UNIBUS_CONTROL_DATO,
 			addr, &wordbuffer);
 	dbg = 0;
-	return unibone_cpu->data_transfer_request.success;
+	bool success = unibone_cpu->data_transfer_request.success;
+	//printf("DATO; ba=%o, data=%o, success=%u\n", addr, data, (int)success) ;
+	return success;
 }
 
 int unibone_datob(unsigned addr, unsigned data) {
@@ -96,7 +98,9 @@ int unibone_datob(unsigned addr, unsigned data) {
 	unibusadapter->cpu_DATA_transfer(unibone_cpu->data_transfer_request, UNIBUS_CONTROL_DATOB,
 			addr, &wordbuffer);
 	dbg = 0;
-	return unibone_cpu->data_transfer_request.success;
+	bool success = unibone_cpu->data_transfer_request.success;
+	//printf("DATOB; ba=%o, data=%o, success=%u\n", addr, data, (int)success) ;
+	return success;
 }
 
 int unibone_dati(unsigned addr, unsigned *data) {
@@ -107,9 +111,10 @@ int unibone_dati(unsigned addr, unsigned *data) {
 			addr, &wordbuffer);
 	*data = wordbuffer;
 	dbg = 0;
-	// printf("DATI; ba=%o, data=%o\n", addr, *data) ;
+	bool success = unibone_cpu->data_transfer_request.success;
+	//printf("DATI; ba=%o, data=%o, success=%u\n", addr, *data, (int)success) ;
+	return success;
 // ARM_DEBUG_PIN0(0) ; // CPU20 diag
-	return unibone_cpu->data_transfer_request.success;
 }
 
 // CPU has changed the arbitration level, just forward
@@ -139,7 +144,9 @@ cpu_c::cpu_c() :
 
 	// init parameters
 	runmode.value = false;
-	init.value = false;
+	start_switch.value = false;
+	halt_switch.value = true;
+	continue_switch.value = false;
 
 	// current CPU does not publish registers to the bus
 	// must be unibusdevice_c then!
@@ -158,24 +165,28 @@ cpu_c::~cpu_c() {
 	unibone_cpu = NULL;
 }
 
-bool cpu_c::on_param_changed(parameter_c *param) {
-	if (param == &enabled) {
-		if (!enabled.new_value) {
-			init.value = false;
-			// HALT disabled CPU
-			stop();
-		} else {
-			// enable active: assert CPU starts stopped
-			stop();
-		}
-	} else if (param == &runmode) {
-		if (runmode.new_value) {
-			start();
-		} else {
-			stop();
-		}
-	}
+// called when "enabled" goes true, before registers plugged to UNIBUS
+// result false: configuration error, do not install
+bool cpu_c::on_before_install(void) {
+	halt_switch.value = true;
+	// all other switches parsed synchronically in worker()
+	start_switch.value = false;
+	continue_switch.value = false;
+	// enable active: assert CPU starts stopped
+	stop("CPU stopped");
+	return true ;
+}
 
+void cpu_c::on_after_uninstall(void) {
+	// all other switches parsed synchronically in worker()
+	start_switch.value = false;
+	halt_switch.value = true;
+	// HALT disabled CPU
+	stop(NULL);
+}
+
+
+bool cpu_c::on_param_changed(parameter_c *param) {
 	return unibusdevice_c::on_param_changed(param); // more actions (for enable)
 }
 
@@ -185,15 +196,31 @@ void cpu_c::start() {
 	mailbox->cpu_enable = 1;
 	mailbox_execute(ARM2PRU_CPU_ENABLE);
 	unibus->set_arbitrator_active(true);
+	pc.readonly = true; // can only be set on stopped CPU
+	ka11.state = 1;
+	// 	what if CONT while WAITING??
 }
 
 // stop CPU logic on PRU and switch arbitration mode
-void cpu_c::stop() {
+void cpu_c::stop(const char * info, bool print_pc) {
 	ka11.state = 0;
+	pc.readonly = false;
+	pc.value = ka11.r[7]; // update for editing
+
 	runmode.value = false;
 	mailbox->cpu_enable = 0;
 	mailbox_execute(ARM2PRU_CPU_ENABLE);
 	unibus->set_arbitrator_active(false);
+
+	if (info && strlen(info)) {
+		if (print_pc) {
+			char buff[256];
+			strcpy(buff, info);
+			strcat(buff, " at %06o");
+			INFO(buff, ka11.r[7]);
+		} else
+			INFO(info);
+	}
 }
 
 // background worker.
@@ -207,7 +234,7 @@ void cpu_c::worker(unsigned instance) {
 	unsigned opcode = 0;
 	(void) opcode;
 
-	power_event = power_event_none;
+	power_event_ACLO_active = power_event_ACLO_inactive = power_event_DCLO_active = false;
 
 	// run with lowest priority, but without wait()
 	// => get all remaining CPU power
@@ -220,35 +247,77 @@ void cpu_c::worker(unsigned instance) {
 		// speed control is difficult, force to use more ARM cycles
 //			if (runmode.value != (ka11.state != 0))
 //				ka11.state = runmode.value;
-		if (runmode.value && (ka11.state == 0))
-			ka11.state = 1; // HALTED -> RUNNING
-		else if (!runmode.value)
-			// HALT position inside instructions !!!
-			ka11.state = 0; // WAITING|RUNNING =- HALTED
+
+		// RUN led
+		runmode.value = (ka11.state > 0); // RUNNING, WAITING
+		if (runmode.value)
+			pc.value = ka11.r[7]; // update for display
+
+		// CONT starts
+		// if HALT+CONT: only one single step
+		if (continue_switch.value && !runmode.value) {
+			start(); // HALTED -> RUNNING
+		}
+		continue_switch.value = false; // momentary action
+
+		if (!runmode.value && start_switch.value) {
+			// START, or HALT+START: reset system
+			ka11.r[7] = pc.value & 0xffff;
+			unibus->init(50);
+			ka11_reset(&ka11);
+			if (!halt_switch.value) {
+				// START without HALT
+				start(); // HALTED -> RUNNING
+			}
+		}
+		start_switch.value = false; // momentary action
+
 		int prev_ka11_state = ka11.state;
 		ka11_condstep(&ka11);
 		if (prev_ka11_state > 0 && ka11.state == 0) {
 			// CPU run on HALT, sync runmode
-			runmode.value = false;
-			printf("CPU HALT at %06o.\n", ka11.r[7]);
+			stop("CPU HALT by opcode", true);
 		}
 
 		// serialize asynchronous power events
-		if (runmode.value) {
-			// don't call power traps if HALTed. Also not on CONT.
-			if (power_event == power_event_down)
-				ka11_pwrdown(&unibone_cpu->ka11);
-			// stop stop some time after power down
-			else if (power_event == power_event_up)
-				ka11_pwrup(&unibone_cpu->ka11);
-			power_event = power_event_none; // processed
+		// ACLO inactive & no HALT: reboot
+		// ACLO inactive & HALT: boot on CONT
+//if (power_event)	DEBUG("power_event=%d", power_event) ;
+		// ACLO: power fail trap, if running.
+		if (runmode.value && power_event_ACLO_active) {
+			ka11_pwrfail_trap(&unibone_cpu->ka11);
+		}
+		power_event_ACLO_active = false; // processed
+
+		// DCLO: halt, like "enable = 0"
+		if (runmode.value && power_event_DCLO_active) {
+			stop("CPU HALT by DCLO");
+//			ka11_reset(&ka11);
+		}
+		power_event_DCLO_active = false ; // processed
+		if (power_event_ACLO_inactive) {
+			// Reboot
+			// if HALT switch active: no action, event remains pending
+//			if (!halt_switch.value) {
+			start(); // start CPU logic on PRU, is bus master now
+			unibus->init(50); // reset devices
+			INFO("ACLO inactive: fetch vector") ;
+			ka11_reset(&unibone_cpu->ka11);
+			ka11_pwrup_vector_fetch(&unibone_cpu->ka11);
+			// M9312 logic here: vectror redirection for 300ms
+//			}
+			power_event_ACLO_inactive = false; // processed
 		}
 
-		if (init.value) {
-			// user wants CPU reset
-			ka11_reset(&ka11);
-			init.value = 0;
+		// HALT: activating stops
+		// Must be last, to undo power-up and CONT
+		// after HALT+power-up: only vector fecth executed
+		// after CONT+HALT: one step executed
+		if (halt_switch.value && runmode.value) {
+			// HALT position inside instructions !!!
+			stop("CPU HALT by switch", true);
 		}
+
 	}
 }
 

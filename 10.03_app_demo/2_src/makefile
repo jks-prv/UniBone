@@ -23,7 +23,7 @@ PRUSS_INCLUDE_DIR = $(PRU_PACKAGE_ROOT)/include
 # ARM LIBRARIES
 PRUSS_DRV_LIB = $(PRU_PACKAGE_ROOT)/bin-bbb/libprussdrv.a
 
-# -static: do not used shared libs, include all code into the binary
+# -static: do not use shared libs, include all code into the binary
 # (big binary, but BBB needs no shared libs of certain versions installed)
 # Example: demo binary goes from 594K to 12.3MB !
 LDFLAGS+= -static -lstdc++ -lpthread $(PRUSS_DRV_LIB)

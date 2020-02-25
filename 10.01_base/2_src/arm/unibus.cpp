@@ -208,6 +208,17 @@ void unibus_c::powercycle(int phase) {
 	}
 }
 
+
+void unibus_c::set_address_overlay(uint32_t address_overlay) {
+		mailbox->address_overlay = address_overlay;
+		mailbox_execute (ARM2PRU_ADDRESS_OVERLAY);
+}
+
+// check: UNIBUS ADDR lines manipulated by (M9312) overlay?
+bool unibus_c::is_address_overlay_active() {
+	return (mailbox->address_overlay != 0) ;
+}
+
 void unibus_c::set_arbitrator_active(bool active) {
 	if (active) {
 		mailbox_execute(ARM2PRU_ARB_MODE_CLIENT);
@@ -282,7 +293,7 @@ bool *timeout) {
 	assert(pru->prucode_id == pru_c::PRUCODE_UNIBUS);
 	*timeout = !dma(true, UNIBUS_CONTROL_DATO, unibus_start_addr, buffer_start_addr, wordcount);
 	if (*timeout) {
-		printf("\nWrite timeout @ 0%6o\n", mailbox->dma.cur_addr);
+		printf("\nWrite timeout @ %06o\n", mailbox->dma.cur_addr);
 		return;
 	}
 }
@@ -299,7 +310,7 @@ bool *timeout) {
 
 	*timeout = !dma(true, UNIBUS_CONTROL_DATI, unibus_start_addr, buffer_start_addr, wordcount);
 	if (*timeout) {
-		printf("\nRead timeout @ 0%6o\n", mailbox->dma.cur_addr);
+		printf("\nRead timeout @ %06o\n", mailbox->dma.cur_addr);
 		return;
 	}
 }
@@ -329,11 +340,11 @@ void unibus_c::mem_access_random(uint8_t unibus_control, uint16_t *words,
 		block_unibus_end_addr = block_unibus_start_addr + 2 * block_wordcount - 2;
 		assert(block_unibus_end_addr <= unibus_end_addr);
 		(*block_counter) += 1;
-		// printf("%06d: %5u words %06o-0%06o\n", *block_counter, block_wordcount, block_unibus_start_addr, block_unibus_end_addr) ;
+		// printf("%06d: %5u words %06o-%06o\n", *block_counter, block_wordcount, block_unibus_start_addr, block_unibus_end_addr) ;
 		*timeout = !dma(true, unibus_control, block_unibus_start_addr, block_buffer_start,
 				block_wordcount);
 		if (*timeout) {
-			printf("\n%s timeout @ 0%6o\n", control2text(unibus_control),
+			printf("\n%s timeout @ %06o\n", control2text(unibus_control),
 					mailbox->dma.cur_addr);
 			return;
 		}

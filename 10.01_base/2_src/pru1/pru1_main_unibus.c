@@ -309,7 +309,7 @@ void main(void) {
 				// "1" bits are ORed with bus master ADDR output.
 				// Pattern saved in bus latches. 
 				// First PRU DMA cycle clears pattern, but reproduces it.
-				address_overlay = mailbox.address_boot_vector ;
+				address_overlay = mailbox.address_overlay ;
 				buslatches_setbyte(2, address_overlay & 0xff); // addr<0:7> = latch[2]
 				buslatches_setbyte(3, (address_overlay >> 8) & 0xff) ; // addr<8:15> = latch[3]
 				buslatches_setbits(4, 0x03, (address_overlay >> 16) & 0x03); // addr<16:17> = latch[4]<0:1>

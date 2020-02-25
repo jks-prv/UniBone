@@ -96,6 +96,10 @@ public:
 
 	void powercycle(int phase = 3);
 
+	
+	void set_address_overlay(uint32_t address_overlay) ;
+	bool is_address_overlay_active(void) ;
+
 	// functions of unibusadapter to do simple DMA 
 	dma_request_c *dma_request;
 	//intr_request_c *intr_request;

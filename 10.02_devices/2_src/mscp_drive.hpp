@@ -46,7 +46,7 @@ public:
 	uint8_t* ReadRCTBlock(uint32_t rctBlockNumber);
 
 public:
-	void on_power_changed(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge) override;
+	void on_power_changed(signal_edge_enum aclo_edge, signal_edge_enum dclo_edge) override;
 	void on_init_changed(void) override;
 
 public:

@@ -67,7 +67,7 @@ private:
 	unibuscpu_c	*registered_cpu ; // only one unibuscpu_c may be registered
 
 	void worker_init_event(void);
-	void worker_power_event(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge);
+	void worker_power_event(signal_edge_enum aclo_edge, signal_edge_enum dclo_edge);
 	void worker_deviceregister_event(void);
 	void worker_device_dma_chunk_complete_event(void);
 	void worker_intr_complete_event(uint8_t level_index);
@@ -87,7 +87,7 @@ public:
 	volatile bool line_DCLO;
 	volatile bool line_ACLO;
 
-	void on_power_changed(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge) override; // must implement
+	void on_power_changed(signal_edge_enum aclo_edge, signal_edge_enum dclo_edge) override; // must implement
 	void on_init_changed(void) override; // must implement
 
 	bool register_device(unibusdevice_c& device);

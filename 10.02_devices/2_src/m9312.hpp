@@ -44,7 +44,6 @@ private:
 
 	void resolve(void);
 
-	bool bootaddress_active; // UNIBUS ADDR lines show BOOT vector
 	unsigned bootaddress_timeout_ms = 300;
 	timeout_c bootaddress_timeout; // vector max 300ms active
 	int bootaddress_reg_trap_accesses; // count access to trap registers
@@ -95,15 +94,15 @@ public:
 	// background worker function
 	void worker(unsigned instance) override;
 
-	void on_before_install(void) override;
+	bool on_before_install(void) override;
 	void on_after_uninstall(void) override;
 
 	// called by unibusadapter on emulated register access
 	void on_after_register_access(unibusdevice_register_t *device_reg, uint8_t unibus_control)
 			override;
 
-	void on_power_changed(device_c::signal_edge_enum aclo_edge,
-			device_c::signal_edge_enum dclo_edge) override;
+	void on_power_changed(signal_edge_enum aclo_edge,
+			signal_edge_enum dclo_edge) override;
 	void on_init_changed(void) override;
 };
 

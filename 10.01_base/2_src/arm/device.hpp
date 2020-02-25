@@ -114,7 +114,7 @@ public:
 	static device_c *find_by_name(char *name);
 
 	// a device can be powered down. use this to define power-up values
-	virtual void on_power_changed(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge) = 0; // reset device, UNIBUS DC_LO
+	virtual void on_power_changed(signal_edge_enum aclo_edge, signal_edge_enum dclo_edge) = 0; // reset device, UNIBUS DC_LO
 
 	// every device has a INIT signal, which can be active (asserted) or inactive
 	// set/release device from INIT state

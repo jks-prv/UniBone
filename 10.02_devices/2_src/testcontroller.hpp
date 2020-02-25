@@ -64,7 +64,7 @@ public:
 	void on_after_register_access(unibusdevice_register_t *device_reg, uint8_t unibus_control)
 			override;
 
-	void on_power_changed(device_c::signal_edge_enum aclo_edge, device_c::signal_edge_enum dclo_edge) override;
+	void on_power_changed(signal_edge_enum aclo_edge, signal_edge_enum dclo_edge) override;
 	void on_init_changed(void) override;
 
 	void test_dma_priority(void);

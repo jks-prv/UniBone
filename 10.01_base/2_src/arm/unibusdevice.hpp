@@ -152,7 +152,7 @@ public:
 
 
 	// callbacks to let device do something on UNIBUS plugin/plugout
-	virtual void on_before_install(void) {} 
+	virtual bool on_before_install(void) { return true ;} 
 	virtual void on_after_uninstall(void) {} 
 
 	
