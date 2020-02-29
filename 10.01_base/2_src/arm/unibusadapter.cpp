@@ -283,7 +283,7 @@ void unibusadapter_c::unregister_device(unibusdevice_c& device) {
 bool unibusadapter_c::register_rom(uint32_t address) {
 	// must be even, must be in IOpage
 	assert((address & 1) == 0);
-	assert(address >= 0760000 && address <= 0777776);
+	assert(address >= UNIBUS_IOPAGE_START && address <= 0777776);
 
 	volatile uint8_t *iopage_cellhandle = &IOPAGE_REGISTER_ENTRY(*deviceregisters, address);
 	// assert: no other ROM installed here, proper nesting of install()/uninstall() required
@@ -300,7 +300,7 @@ bool unibusadapter_c::register_rom(uint32_t address) {
 void unibusadapter_c::unregister_rom(uint32_t address) {
 	// must be even, must be in IOpage
 	assert((address & 1) == 0);
-	assert(address >= 0760000 && address <= 0777776);
+	assert(address >= UNIBUS_IOPAGE_START && address <= 0777776);
 
 	volatile uint8_t *iopage_cellhandle = &IOPAGE_REGISTER_ENTRY(*deviceregisters, address);
 	// assert: ROM (or device reg) installed here, proper nesting of install()/uninstall() required
@@ -1220,7 +1220,7 @@ void unibusadapter_c::print_shared_register_map() {
 	printf("Device registers by IO page address:\n");
 	for (i = 0; i < 0x1000; i++) {
 		// scan all addresses in IO page
-		addr = 0760000 + 2 * i;
+		addr = UNIBUS_IOPAGE_START + 2 * i;
 		register_handle = IOPAGE_REGISTER_ENTRY(*deviceregisters, addr);
 		if (register_handle) {
 			shared_reg = &(deviceregisters->registers[register_handle]);

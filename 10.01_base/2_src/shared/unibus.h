@@ -33,6 +33,8 @@
 
 #define UNIBUS_WORDCOUNT	0x20000	// 128KiW = 256 KiB
 
+#define UNIBUS_IOPAGE_START 0760000 //
+
 // bus transaction. can be directly assigned to lines C1,C0
 #define UNIBUS_CONTROL_DATI	0x00 // 16 bit word from slave to master
 #define UNIBUS_CONTROL_DATIP	0x01 // DATI, inhibts core restore. DATO must follow.
@@ -58,7 +60,7 @@ typedef struct {
 #ifdef ARM
 // included only by ARM code
 #include "logsource.hpp"
-#include "utils.hpp"
+#include "timeout.hpp"
 
 // parameter and functions for low level UNIBUS control
 

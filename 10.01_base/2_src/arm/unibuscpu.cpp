@@ -24,6 +24,7 @@
 27-aug-2019	JH      start
  */
 
+#include "logger.hpp"
 #include "unibuscpu.hpp"
 
 // after UNIBUS install, device is reset by DCLO cycle

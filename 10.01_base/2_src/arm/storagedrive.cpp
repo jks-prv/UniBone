@@ -34,6 +34,7 @@
 #include <ios>
 using namespace std;
 
+#include "logger.hpp"
 #include "storagedrive.hpp"
 
 storagedrive_c::storagedrive_c(storagecontroller_c *controller) :

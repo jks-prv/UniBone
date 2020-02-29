@@ -10,6 +10,7 @@
 #include <assert.h>
 #include <pthread.h>
 
+#include "logger.hpp"
 #include "unibus.h"
 #include "unibusadapter.hpp"
 #include "unibusdevice.hpp"

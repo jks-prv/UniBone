@@ -41,7 +41,7 @@
 
 #include "utils.hpp"
 #include "gpios.hpp"
-#include "logsource.hpp"
+#include "logger.hpp"
 #include "unibusadapter.hpp"
 #include "unibusdevice.hpp"	// definition of class device_c
 #include "unibus.h"
@@ -379,10 +379,13 @@ void slu_c::worker_rcv(void) {
 		// at the moments, it is only sent on maintenance loopback xmt
 		/* read serial data, if any */
 		if (rs232adapter.rs232byte_rcv_poll(&rcv_byte)) {
+DEBUG("rcv_byte=0x%02x", (unsigned)rcv_byte.c) ;
 			pthread_mutex_lock(&on_after_rcv_register_access_mutex); // signal changes atomic against UNIBUS accesses
 			rcv_or_err = rcv_fr_err = rcv_p_err = 0;
-			if (rcv_done) // not yet cleared? overrun!
+			if (rcv_done) { // not yet cleared? overrun!
 				rcv_or_err = 1;
+			DEBUG("RCV OVERRUN") ;
+			}
 			rcv_buffer = rcv_byte.c;
 			if (rcv_byte.format_error)
 				rcv_fr_err = rcv_p_err = 1;

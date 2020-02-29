@@ -32,6 +32,7 @@
 #include <limits.h>	// PATH_MAX
 
 #include "mcout.h"
+#include "logger.hpp"
 #include "application.hpp" // own
 
 #include "gpios.hpp"

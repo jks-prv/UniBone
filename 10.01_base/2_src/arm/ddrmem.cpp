@@ -44,6 +44,7 @@ ddrmem_c *ddrmem;
 
 ddrmem_c::ddrmem_c() {
 	log_label = "DDRMEM";
+	pmi_address_overlay = 0 ;
 }
 
 // check allocated memory and print info
@@ -79,9 +80,38 @@ bool ddrmem_c::exam(uint32_t addr, uint16_t *w) {
 	return true;
 }
 
+// if CPU accesses memory direct and not via UNIBUS
+// PMI = "Private Memory Interconnect" = local memory bus on 11/44,60,84 etc.
+// No UNIBUS range, always memory present at all addresses
+bool ddrmem_c::pmi_deposit(uint32_t addr, uint16_t w) {
+	assert((addr & 1) == 0); // must be even
+	assert(addr < UNIBUS_IOPAGE_START);
+	base_virtual->memory.words[addr / 2] = w;
+	return true;
+}
+
+bool ddrmem_c::pmi_exam(uint32_t addr, uint16_t *w) {
+	assert((addr & 1) == 0); // must be even
+	assert(addr < UNIBUS_IOPAGE_START);
+	*w = base_virtual->memory.words[addr / 2];
+	return true;
+}
+
+
+// IF an emualted CPU is working on DDRRAm directly via PMI
+// AND an M9312 is overlaying addresses with 773000 
+// THEN also PMI accesses must be redirected the same way.
+//
+// This is something not existent on real PDP11s with separate memory bus:
+// The M9312 in IO UNIBUs cannot manipulated addresses on the Memory BUS.
+void ddrmem_c::set_pmi_address_overlay(uint32_t address_overlay) {
+	this->pmi_address_overlay = address_overlay ;
+}
+
+
 // independent of memory emulation, memory used for IOpage ROM is always accessible
 bool ddrmem_c::iopage_deposit(uint32_t addr, uint16_t w) {
-	if (addr < 0760000 || addr >= 2*UNIBUS_WORDCOUNT)
+	if (addr < UNIBUS_IOPAGE_START || addr >= 2*UNIBUS_WORDCOUNT)
 		return false;
 	assert(len >= addr/2) ;
 	base_virtual->memory.words[addr / 2] = w;
@@ -89,7 +119,7 @@ bool ddrmem_c::iopage_deposit(uint32_t addr, uint16_t w) {
 }
 
 bool ddrmem_c::iopage_exam(uint32_t addr, uint16_t *w) {
-	if (addr < 0760000 || addr >= 2*UNIBUS_WORDCOUNT)
+	if (addr < UNIBUS_IOPAGE_START || addr >= 2*UNIBUS_WORDCOUNT)
 		return false;
 	assert(len >= addr/2) ;
 	*w = base_virtual->memory.words[addr / 2];
@@ -164,14 +194,14 @@ bool ddrmem_c::set_range(uint32_t startaddr, uint32_t endaddr) {
 	unibus_startaddr = startaddr;
 	unibus_endaddr = endaddr;
 	// set all memory pages to IGNORE
-	for (addr = 0; addr < 0760000; addr += PAGE_SIZE)
+	for (addr = 0; addr < UNIBUS_IOPAGE_START; addr += PAGE_SIZE)
 		deviceregisters->pagetable[addr / PAGE_SIZE] = PAGE_IGNORE;
 
 	enabled = (unibus_startaddr <= unibus_endaddr);
 	if (!enabled)
 		return true;
 	result = false;
-	if (unibus_endaddr >= 0760000)
+	if (unibus_endaddr >= UNIBUS_IOPAGE_START)
 		INFO("endaddr %06o in IO page", unibus_endaddr);
 	// addresses must fit page borders
 	else if (unibus_startaddr % PAGE_SIZE)

@@ -152,13 +152,13 @@ bool application_c::emulate_memory() {
 	emulated_memory_end_addr = 0; // start > end: disable
 	ddrmem->set_range(emulated_memory_start_addr, emulated_memory_end_addr);
 	first_invalid_addr = unibus->test_sizer();
-	if (first_invalid_addr >= 0760000)
+	if (first_invalid_addr >= UNIBUS_IOPAGE_START)
 		printf("Found physical memory in full range 0..0757776, no emulation necessary!\n");
 	else {
 		// Emulate all unimplemented memory behind physical
-		if (ddrmem->set_range(first_invalid_addr, 0757776)) {
+		if (ddrmem->set_range(first_invalid_addr, UNIBUS_IOPAGE_START-2)) {
 			emulated_memory_start_addr = first_invalid_addr;
-			emulated_memory_end_addr = 0757776;
+			emulated_memory_end_addr = UNIBUS_IOPAGE_START-2;
 			printf("Now emulating UNIBUS memory in range %06o..%06o with DDR memory.\n",
 					emulated_memory_start_addr, emulated_memory_end_addr);
 			result = true;

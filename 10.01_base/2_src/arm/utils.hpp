@@ -30,12 +30,11 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include <time.h>
 
 #include <string>
 #include <algorithm> // TRIM_STRING
 
-#include "logger.hpp"
+
 
 #define MILLION 1000000LL
 #define BILLION (1000LL * MILLION)
@@ -59,25 +58,6 @@ void SIGINTcatchnext();
 // dummy to have an executable line for break points
 void break_here(void);
 
-class timeout_c: public logsource_c {
-private:
-	struct timespec starttime;
-	uint64_t duration_ns;
-public:
-	timeout_c();
-	uint64_t get_resolution_ns(void) ;
-	void start_ns(uint64_t duration_ns);
-	void start_us(uint64_t duration_us) ;
-	void start_ms(uint64_t duration_ms) ;
-	uint64_t elapsed_ns(void);
-	uint64_t elapsed_us(void);
-	uint64_t elapsed_ms(void);
-	bool reached(void);
-	static void wait_ns(uint64_t duration_ns);
-	static void wait_us(unsigned duration_us);
-	static void wait_ms(unsigned duration_ms);
-
-};
 
 class progress_c {
 private:

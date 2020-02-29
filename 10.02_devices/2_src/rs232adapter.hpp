@@ -31,6 +31,7 @@
 #include <sstream>
 #include <deque>
 #include "utils.hpp"
+#include "timeout.hpp"
 #include "logsource.hpp"
 #include "rs232.hpp"
 

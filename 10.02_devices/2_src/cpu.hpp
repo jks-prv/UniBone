@@ -62,6 +62,10 @@ public:
 	false, "CONT action switch: 1 = CPU restart after HALT. CONT+HALT = single step.");
 	parameter_bool_c start_switch = parameter_bool_c(this, "start_switch", "s",/*readonly*/
 	false, "START action switch: 1 = reset & start CPU from PC. START+HALT: reset.");
+
+	parameter_bool_c direct_memory = parameter_bool_c(this, "pmi", "pmi",/*readonly*/
+	false, "Private Memory Interconnect: CPU accesses memory internally, not over UNIBUS.");
+
 	parameter_unsigned_c pc = parameter_unsigned_c(this, "PC", "pc",/*readonly*/
 	false, "", "%06o", "program counter helper register.", 16, 8);
 

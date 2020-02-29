@@ -131,6 +131,7 @@ OBJECTS = $(OBJDIR)/application.o	\
 	$(OBJDIR)/mailbox.o	\
 	$(OBJDIR)/ddrmem.o	\
 	$(OBJDIR)/iopageregister.o	\
+	$(OBJDIR)/timeout.o	\
 	$(OBJDIR)/logsource.o	\
 	$(OBJDIR)/logger.o	\
 	$(OBJDIR)/utils.o	\
@@ -305,6 +306,9 @@ $(OBJDIR)/bitcalc.o :  $(COMMON_SRC_DIR)/bitcalc.cpp $(COMMON_SRC_DIR)/bitcalc.h
 	$(CC) $(CCFLAGS) $< -o $@
 
 $(OBJDIR)/gpios.o :  $(BASE_SRC_DIR)/gpios.cpp $(BASE_SRC_DIR)/gpios.hpp
+	$(CC) $(CCFLAGS) $< -o $@
+
+$(OBJDIR)/timeout.o :  $(BASE_SRC_DIR)/timeout.cpp $(BASE_SRC_DIR)/timeout.hpp
 	$(CC) $(CCFLAGS) $< -o $@
 
 $(OBJDIR)/logsource.o :  $(COMMON_SRC_DIR)/logsource.cpp $(COMMON_SRC_DIR)/logsource.hpp

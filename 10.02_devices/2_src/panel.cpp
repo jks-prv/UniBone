@@ -50,6 +50,7 @@
 #include <linux/i2c-dev.h>
 
 #include "utils.hpp"
+#include "timeout.hpp"
 #include "logger.hpp"
 #include "gpios.hpp"
 #include "panel.hpp"

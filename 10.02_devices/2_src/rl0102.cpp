@@ -29,6 +29,7 @@
 using namespace std;
 
 #include "logger.hpp"
+#include "timeout.hpp"
 #include "utils.hpp"
 #include "rl11.hpp"
 #include "rl0102.hpp"

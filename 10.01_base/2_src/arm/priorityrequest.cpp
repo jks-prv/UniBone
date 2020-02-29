@@ -27,6 +27,7 @@
 #include <assert.h>
 #include <algorithm>
 
+#include "logger.hpp"
 #include "unibusdevice.hpp"
 #include "priorityrequest.hpp"
 

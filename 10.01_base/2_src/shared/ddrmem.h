@@ -47,6 +47,8 @@ public:
 	uint32_t unibus_startaddr;
 	uint32_t unibus_endaddr;
 
+	uint32_t pmi_address_overlay ;
+
 	ddrmem_c();
 	void info(void);
 	void save(char *fname);
@@ -58,6 +60,11 @@ public:
 	bool set_range(uint32_t startaddr, 	uint32_t endaddr);
 	bool deposit(uint32_t addr, uint16_t w);
 	bool exam(uint32_t addr, uint16_t *w);
+
+	bool pmi_deposit(uint32_t addr, uint16_t w);
+	bool pmi_exam(uint32_t addr, uint16_t *w);
+	void set_pmi_address_overlay(uint32_t address_overlay) ;
+		
 	bool iopage_deposit(uint32_t addr, uint16_t w) ;
 	bool iopage_exam(uint32_t addr, uint16_t *w) ;
 	

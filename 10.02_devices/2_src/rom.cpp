@@ -43,6 +43,7 @@
  A loaded ROM can be installed to UNIBUS (by setting PRU maps)
  */
 
+#include "logger.hpp"
 #include "unibusadapter.hpp"
 #include "ddrmem.h"
 #include "rom.hpp"

@@ -56,6 +56,7 @@
 #include <string.h>
 #include <assert.h>
 #include <pthread.h>
+#include "logger.hpp"
 #include "rs232adapter.hpp"
 
 rs232adapter_c::rs232adapter_c() {
@@ -71,6 +72,7 @@ rs232adapter_c::rs232adapter_c() {
 	pattern_found = false;
 	baudrate = 0; // default: no delay
 	rcv_baudrate_delay.start_us(0); // start with elapsed() == true"
+	*log_level_ptr = LL_DEBUG ; // temporary: log all
 }
 
 // BYTE interface: check for received char (from stream or RS232)
@@ -104,6 +106,8 @@ bool rs232adapter_c::rs232byte_rcv_poll(rs232byte_t *rcvbyte) {
 		uint8_t c_raw;
 		rcvbyte->format_error = false; // default: no error info
 		int n = rs232->PollComport(&c_raw, 1);
+		if (n > 0) {
+		//DEBUG("rcv 0x%02x", (unsigned)c_raw) ;
 		if (rcv_termios_error_encoding && c_raw == 0xff) {
 			n = rs232->PollComport(&c_raw, 1);
 			assert(n);	// next char after 0xff escape immediately available
@@ -113,7 +117,7 @@ bool rs232adapter_c::rs232byte_rcv_poll(rs232byte_t *rcvbyte) {
 				n = rs232->PollComport(&c_raw, 1);
 				assert(n); // next char after 0xff 0 seq is data"
 				rcvbyte->c = c_raw;
-			} else if (c_raw == 0xff) { // enocoded 0xff
+			} else if (c_raw == 0xff) { // encoded 0xff
 				rcvbyte->c = 0xff;
 			} else {
 				WARNING("Received 0xff <stray> sequence");
@@ -122,6 +126,7 @@ bool rs232adapter_c::rs232byte_rcv_poll(rs232byte_t *rcvbyte) {
 		} else
 			// received non-escaped data byte
 			rcvbyte->c = c_raw;
+			}
 		result = (n > 0);
 	}
 

@@ -29,6 +29,7 @@
 #include <stdbool.h>
 
 #include "utils.hpp"
+#include "logger.hpp"
 #include "inputline.hpp"
 #include "mcout.h"
 #include "application.hpp" // own

@@ -68,6 +68,7 @@
 
 #include "mailbox.h"
 #include "utils.hpp"
+#include "logger.hpp"
 #include "unibusadapter.hpp"
 #include "unibusdevice.hpp"	// definition of class device_c
 #include "m9312.hpp"
@@ -337,6 +338,7 @@ void m9312_c::worker(unsigned instance) {
 void m9312_c::bootaddress_set() {
 	if (bootaddress != MEMORY_ADDRESS_INVALID) {
 		unibus->set_address_overlay(0773000) ;
+		ddrmem->set_pmi_address_overlay(0773000) ; // emulated CPU booting from DDRRAM via PMI?
 		DEBUG("bootaddress_set");
 		// remove vector after 300ms, if no  access to PC/PSW at 773024/26
 		bootaddress_timeout.start_ms(bootaddress_timeout_ms);
@@ -348,6 +350,7 @@ void m9312_c::bootaddress_set() {
 void m9312_c::bootaddress_clear() {
 	if (unibus->is_address_overlay_active()) {
 		unibus->set_address_overlay(0) ;
+		ddrmem->set_pmi_address_overlay(0) ;
 		DEBUG("bootaddress_clr_event");
 	}
 }

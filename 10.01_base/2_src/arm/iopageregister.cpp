@@ -30,7 +30,7 @@
 #include <string.h>
 #include "pru.hpp"
 
-//#include "pru1_config.h"
+#include "unibus.h"
 #include "iopageregister.h"
 
 // Device register struct shared between PRU and ARM.
@@ -63,7 +63,7 @@ void iopageregisters_init() {
 	for (i = 0; i < PAGE_COUNT; i++)
 		deviceregisters->pagetable[i] = PAGE_IGNORE;
 	// mark IO pages
-	for (addr = 0760000; addr < 01000000; addr += PAGE_SIZE)
+	for (addr = UNIBUS_IOPAGE_START; addr < 01000000; addr += PAGE_SIZE)
 		deviceregisters->pagetable[addr / PAGE_SIZE] = PAGE_IO;
 
 	// clear the iopage addr map: no register assigned
@@ -83,9 +83,9 @@ void iopageregisters_print_tables(void) {
 	printf("\n");
 	printf("Secondary IO page register table:");
 	n = 0; // counts valid registers
-	for (addr = 0760000; addr < 0100000; addr += 2) {
+	for (addr = UNIBUS_IOPAGE_START; addr < 0100000; addr += 2) {
 		uint8_t reghandle;
-		i = (addr - 0760000) / 2; // register handle
+		i = (addr - UNIBUS_IOPAGE_START) / 2; // register handle
 		reghandle = deviceregisters->iopage_register_handles[i];
 		if (reghandle != 0) {
 			if ((n % 4) == 0) // 4 in a row

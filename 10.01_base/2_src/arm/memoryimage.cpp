@@ -45,6 +45,7 @@
 #include <ctype.h>
 #include <assert.h>
 
+#include "utils.hpp"
 #include "logger.hpp"
 #include "memoryimage.hpp" // own
 

@@ -12,6 +12,7 @@ using namespace std;
 
 #include "logger.hpp"
 #include "utils.hpp"
+#include "timeout.hpp"
 #include "rk11.hpp"
 #include "rk05.hpp"
 

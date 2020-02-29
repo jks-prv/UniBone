@@ -29,6 +29,7 @@
 #include <stdbool.h>
 #include <linux/limits.h>
 
+#include "logger.hpp"
 #include "inputline.hpp"
 #include "mcout.h"
 

@@ -45,6 +45,7 @@ using namespace std;
 
 #include "utils.hpp"
 #include "logger.hpp"
+#include "timeout.hpp"
 #include "device.hpp"
 
 // declare device list of class separate

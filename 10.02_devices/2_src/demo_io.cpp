@@ -34,6 +34,8 @@
 
 #include <string.h>
 
+#include "logger.hpp"
+#include "timeout.hpp"
 #include "unibusadapter.hpp"
 #include "unibusdevice.hpp"	// definition of class device_c
 #include "demo_io.hpp"

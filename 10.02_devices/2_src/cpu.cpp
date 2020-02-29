@@ -29,6 +29,7 @@
 #include <string.h>
 #include <stdarg.h>
 
+#include "logger.hpp"
 #include "mailbox.h"
 #include "gpios.hpp"	// ARM_DEBUG_PIN*
 
@@ -78,43 +79,83 @@ void unibone_grant_interrupts(void) {
 	}
 }
 
+// Access to UNIBUS, helper for foreign CPU emulation.
 // Result: 1 = OK, 0 = bus timeout
+// When "PMI": memory is not accessed via UNIBUS cycles, 
+// but by DDRAM is accessed directly.
+// Then UNIBUS accesses only the IOPage.
+// Motivation: 
+// - Fix for slow CPU executiontime because of UNIBUS delays.
+// - Option to implement CPUs with local 22bit memory later.
+// - DEC also had separate IO and MEMORY Busses. See 11/44,60,70,84 and others
 int unibone_dato(unsigned addr, unsigned data) {
 	uint16_t wordbuffer = (uint16_t) data;
 
-	dbg = 1;
-	unibusadapter->cpu_DATA_transfer(unibone_cpu->data_transfer_request, UNIBUS_CONTROL_DATO,
-			addr, &wordbuffer);
-	dbg = 0;
-	bool success = unibone_cpu->data_transfer_request.success;
-	//printf("DATO; ba=%o, data=%o, success=%u\n", addr, data, (int)success) ;
-	return success;
+	if (unibone_cpu->direct_memory.value && addr < UNIBUS_IOPAGE_START) {
+		// Direct access Non-IOPage memory.
+		ddrmem->pmi_deposit(addr, data);
+		return true;
+	} else {
+		dbg = 1;
+		unibusadapter->cpu_DATA_transfer(unibone_cpu->data_transfer_request,
+		UNIBUS_CONTROL_DATO, addr, &wordbuffer);
+		dbg = 0;
+		bool success = unibone_cpu->data_transfer_request.success;
+		//printf("DATO; ba=%o, data=%o, success=%u\n", addr, data, (int)success) ;
+		return success;
+	}
 }
 
 int unibone_datob(unsigned addr, unsigned data) {
-	uint16_t wordbuffer = (uint16_t) data;
-	// TODO DATOB als 1 byte-DMA !
-	dbg = 1;
-	unibusadapter->cpu_DATA_transfer(unibone_cpu->data_transfer_request, UNIBUS_CONTROL_DATOB,
-			addr, &wordbuffer);
-	dbg = 0;
-	bool success = unibone_cpu->data_transfer_request.success;
-	//printf("DATOB; ba=%o, data=%o, success=%u\n", addr, data, (int)success) ;
-	return success;
+	if (unibone_cpu->direct_memory.value && addr < UNIBUS_IOPAGE_START) {
+		// read-modify-write
+		unsigned word_address = addr & ~1; // lower even address
+		uint16_t w;
+		ddrmem->pmi_exam(word_address, &w);
+		if (addr & 1) // odd addr: set bits <8:15>
+//			w = (w & 0xff) | (data << 8);
+			w = (w & 0xff) | (data & 0xff00);
+		else
+			// even addr: set bits <0:7>
+			w = (w & 0xff00) | (data & 0xff) ;
+		ddrmem->pmi_deposit(word_address, w);
+		return true;
+	} else {
+		// TODO DATOB als 1 byte-DMA !
+		dbg = 1;
+		uint16_t w = (uint16_t) data ;
+		unibusadapter->cpu_DATA_transfer(unibone_cpu->data_transfer_request,
+		UNIBUS_CONTROL_DATOB, addr, &w);
+		dbg = 0;
+		bool success = unibone_cpu->data_transfer_request.success;
+		//printf("DATOB; ba=%o, data=%o, success=%u\n", addr, data, (int)success) ;
+		return success;
+	}
 }
 
 int unibone_dati(unsigned addr, unsigned *data) {
-	uint16_t wordbuffer;
+	uint16_t w;
+	if (unibone_cpu->direct_memory.value && addr < UNIBUS_IOPAGE_START) {
+		// boot address redirection by M9312? addrs 24/26 now in M9312 IOpage
+		addr |= ddrmem->pmi_address_overlay ;
+	}
+	if (unibone_cpu->direct_memory.value && addr < UNIBUS_IOPAGE_START) {
+		// Direct access Non-IOPage memory.
+		ddrmem->pmi_exam(addr, &w);
+		*data = w;
+		return true;
+	} else {
 // ARM_DEBUG_PIN0(1) ; // CPU20 diag
-	dbg = 1;
-	unibusadapter->cpu_DATA_transfer(unibone_cpu->data_transfer_request, UNIBUS_CONTROL_DATI,
-			addr, &wordbuffer);
-	*data = wordbuffer;
-	dbg = 0;
-	bool success = unibone_cpu->data_transfer_request.success;
-	//printf("DATI; ba=%o, data=%o, success=%u\n", addr, *data, (int)success) ;
-	return success;
+		dbg = 1;
+		unibusadapter->cpu_DATA_transfer(unibone_cpu->data_transfer_request,
+				UNIBUS_CONTROL_DATI, addr, &w);
+		*data = w;
+		dbg = 0;
+		bool success = unibone_cpu->data_transfer_request.success;
+		//printf("DATI; ba=%o, data=%o, success=%u\n", addr, *data, (int)success) ;
+		return success;
 // ARM_DEBUG_PIN0(0) ; // CPU20 diag
+	}
 }
 
 // CPU has changed the arbitration level, just forward
@@ -137,16 +178,17 @@ cpu_c::cpu_c() :
 	name.value = "CPU20";
 	type_name.value = "PDP-11/20";
 	log_label = "cpu";
-	default_base_addr = 0; // none
+	default_base_addr = 0;  // none
 	default_intr_vector = 0;
 	default_intr_level = 0;
-	priority_slot.value = 0; // not used
+	priority_slot.value = 0;  // not used
 
 	// init parameters
 	runmode.value = false;
 	start_switch.value = false;
 	halt_switch.value = true;
 	continue_switch.value = false;
+	direct_memory.value = false ;
 
 	// current CPU does not publish registers to the bus
 	// must be unibusdevice_c then!
@@ -158,7 +200,7 @@ cpu_c::cpu_c() :
 
 	// link to global instance ptr
 	assert(unibone_cpu == NULL);// only one possible
-	unibone_cpu = this; // Singleton
+	unibone_cpu = this;	// Singleton
 }
 
 cpu_c::~cpu_c() {
@@ -169,22 +211,21 @@ cpu_c::~cpu_c() {
 // result false: configuration error, do not install
 bool cpu_c::on_before_install(void) {
 	halt_switch.value = true;
-	// all other switches parsed synchronically in worker()
+// all other switches parsed synchronically in worker()
 	start_switch.value = false;
 	continue_switch.value = false;
-	// enable active: assert CPU starts stopped
+// enable active: assert CPU starts stopped
 	stop("CPU stopped");
-	return true ;
+	return true;
 }
 
 void cpu_c::on_after_uninstall(void) {
-	// all other switches parsed synchronically in worker()
+// all other switches parsed synchronically in worker()
 	start_switch.value = false;
 	halt_switch.value = true;
-	// HALT disabled CPU
+// HALT disabled CPU
 	stop(NULL);
 }
-
 
 bool cpu_c::on_param_changed(parameter_c *param) {
 	return unibusdevice_c::on_param_changed(param); // more actions (for enable)
@@ -198,7 +239,7 @@ void cpu_c::start() {
 	unibus->set_arbitrator_active(true);
 	pc.readonly = true; // can only be set on stopped CPU
 	ka11.state = 1;
-	// 	what if CONT while WAITING??
+// 	what if CONT while WAITING??
 }
 
 // stop CPU logic on PRU and switch arbitration mode
@@ -228,18 +269,18 @@ void cpu_c::stop(const char * info, bool print_pc) {
 void cpu_c::worker(unsigned instance) {
 	UNUSED(instance); // only one
 	timeout_c timeout;
-	// bool nxm;
-	// unsigned pc = 0;
-	//unsigned dr = 0760102;
+// bool nxm;
+// unsigned pc = 0;
+//unsigned dr = 0760102;
 	unsigned opcode = 0;
 	(void) opcode;
 
 	power_event_ACLO_active = power_event_ACLO_inactive = power_event_DCLO_active = false;
 
-	// run with lowest priority, but without wait()
-	// => get all remaining CPU power
+// run with lowest priority, but without wait()
+// => get all remaining CPU power
 	worker_init_realtime_priority(none_rt);
-	//worker_init_realtime_priority(device_rt);
+//worker_init_realtime_priority(device_rt);
 
 	timeout.wait_us(1);
 
@@ -294,19 +335,19 @@ void cpu_c::worker(unsigned instance) {
 			stop("CPU HALT by DCLO");
 //			ka11_reset(&ka11);
 		}
-		power_event_DCLO_active = false ; // processed
+		power_event_DCLO_active = false; // processed
 		if (power_event_ACLO_inactive) {
 			// Reboot
 			// if HALT switch active: no action, event remains pending
 //			if (!halt_switch.value) {
-			start(); // start CPU logic on PRU, is bus master now
-			unibus->init(50); // reset devices
-			INFO("ACLO inactive: fetch vector") ;
+			start();		// start CPU logic on PRU, is bus master now
+			unibus->init(50);		// reset devices
+			INFO("ACLO inactive: fetch vector");
 			ka11_reset(&unibone_cpu->ka11);
 			ka11_pwrup_vector_fetch(&unibone_cpu->ka11);
 			// M9312 logic here: vectror redirection for 300ms
 //			}
-			power_event_ACLO_inactive = false; // processed
+			power_event_ACLO_inactive = false;		// processed
 		}
 
 		// HALT: activating stops
@@ -330,7 +371,7 @@ void cpu_c::worker(unsigned instance) {
 //      do not read back dati_flipflops.
 void cpu_c::on_after_register_access(unibusdevice_register_t *device_reg,
 		uint8_t unibus_control) {
-	// nothing todo
+// nothing todo
 	UNUSED(device_reg);
 	UNUSED(unibus_control);
 }
@@ -342,11 +383,11 @@ void cpu_c::on_after_register_access(unibusdevice_register_t *device_reg,
 // sets mailbox->arbitrator.cpu_priority_level and 
 // PRU is allowed now to grant BGs again.
 void cpu_c::on_interrupt(uint16_t vector) {
-	// CPU sequence:
-	// push PSW to stack
-	// push PC to stack 
-	// PC := *vector
-	// PSW := *(vector+2)
+// CPU sequence:
+// push PSW to stack
+// push PC to stack
+// PC := *vector
+// PSW := *(vector+2)
 	ka11_setintr(&unibone_cpu->ka11, vector);
 }
 
