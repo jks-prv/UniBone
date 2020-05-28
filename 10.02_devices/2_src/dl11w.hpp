@@ -197,11 +197,16 @@ private:
 	bool intr_enable; // interrupt enable, LKS bit 6
 	bool line_clock_monitor; // LKS bit 7
 
-	bool clock_signal ; // square wave from pwower supply
-
 	bool get_intr_signal_level(void);
 	void set_lks_dati_value_and_INTR(bool do_intr);
 
+	// Adaptive clock ticks	:
+	// track world time since last INIT
+	timeout_c	world_time_since_init ;
+	// # of power supply square wave edges emulated so far
+	// overflow: 2^32 @ 120 Hz -> 414 Tage
+	uint32_t clock_ticks_produced_since_init ;
+	
 public:
 
 	ltc_c();

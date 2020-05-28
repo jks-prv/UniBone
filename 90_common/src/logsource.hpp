@@ -38,7 +38,6 @@
 
 #include <string>
 
-
 class logsource_c {
 private:
 	// default vars for logsources without own variables
