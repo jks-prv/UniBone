@@ -104,7 +104,7 @@ bool timeout_c::reached() {
 void timeout_c::wait_ns(uint64_t duration_ns) {
 	struct timespec ts = { (long) (duration_ns / BILLION), (long) (duration_ns % BILLION) };
 	int res = nanosleep(&ts, NULL);
-	assert(res == 0);
+	assert(res == 0 || (res == -1 && errno == EINTR)); // ^C abort may happen.
 //		DEBUG("nanosleep() return a %d", res);
 }
 
