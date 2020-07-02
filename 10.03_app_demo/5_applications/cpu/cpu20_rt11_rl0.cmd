@@ -40,7 +40,7 @@ sd cpu20
 .print Physical DL11-W used, stimulate LTC clock externally
 .print Start 10000 to boot from drive 0, 10010 for drive 1, ...
 .print Reload with "m ll"
-.print Start CPU20 with "p r 1"
+.print Start CPU20 by toggeling CONT switch with "p c 1"
 
 
 

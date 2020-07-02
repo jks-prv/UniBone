@@ -56,7 +56,7 @@ using namespace std;
 
 #include "logsource.hpp"
 #include "logger.hpp"
-
+#include "timeout.hpp"
 #include "getopt2.hpp"
 #include "kbhit.h"
 #include "inputline.hpp"
@@ -306,6 +306,8 @@ int application_c::run(int argc, char *argv[]) {
 static void factory() {
 	// logger first, all logsource_c connect to it.
 	logger = new logger_c();
+
+	the_flexi_timeout_controller = new flexi_timeout_controller_c() ;
 
 	pru = new pru_c();
 	gpios = new gpios_c();

@@ -21,7 +21,7 @@ init
 
 .input
 
-p run 1
+p c 1
 
 .print CPU20 started
 

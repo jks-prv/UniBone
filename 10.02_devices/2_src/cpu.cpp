@@ -39,6 +39,15 @@
 #include "unibusdevice.hpp"	// definition of class device_c
 #include "cpu.hpp"
 
+/* If CPU_CONTROLLED_TIME,
+   then time base for all devices, also KW11 50Hz, are
+   derived from emulated CPU cycles.
+ 
+   Otherwise time is Linux world time, proceding even if execution of emulation is stopped due to 
+   task scheduling.
+ */
+#undef CPU_CONTROLLED_TIME	
+
 int dbg = 0;
 
 /*** functions to be used by Angelos CPU emulator ***/
@@ -85,12 +94,17 @@ void unibone_grant_interrupts(void) {
 // but by DDRAM is accessed directly.
 // Then UNIBUS accesses only the IOPage.
 // Motivation: 
-// - Fix for slow CPU executiontime because of UNIBUS delays.
+// - Fix for slow CPU execution time because of UNIBUS delays.
 // - Option to implement CPUs with local 22bit memory later.
 // - DEC also had separate IO and MEMORY Busses. See 11/44,60,70,84 and others
+
+#define UNIBUS_ACCESS_NS	1000
+// "real world" time for bus access. emulated timeout is stepped by this on every cycle.
+
 int unibone_dato(unsigned addr, unsigned data) {
 	uint16_t wordbuffer = (uint16_t) data;
 
+	the_flexi_timeout_controller->emu_step_ns(UNIBUS_ACCESS_NS);
 	if (unibone_cpu->direct_memory.value && addr < UNIBUS_IOPAGE_START) {
 		// Direct access Non-IOPage memory.
 		ddrmem->pmi_deposit(addr, data);
@@ -107,6 +121,7 @@ int unibone_dato(unsigned addr, unsigned data) {
 }
 
 int unibone_datob(unsigned addr, unsigned data) {
+	the_flexi_timeout_controller->emu_step_ns(UNIBUS_ACCESS_NS);
 	if (unibone_cpu->direct_memory.value && addr < UNIBUS_IOPAGE_START) {
 		// read-modify-write
 		unsigned word_address = addr & ~1; // lower even address
@@ -117,13 +132,13 @@ int unibone_datob(unsigned addr, unsigned data) {
 			w = (w & 0xff) | (data & 0xff00);
 		else
 			// even addr: set bits <0:7>
-			w = (w & 0xff00) | (data & 0xff) ;
+			w = (w & 0xff00) | (data & 0xff);
 		ddrmem->pmi_deposit(word_address, w);
 		return true;
 	} else {
 		// TODO DATOB als 1 byte-DMA !
 		dbg = 1;
-		uint16_t w = (uint16_t) data ;
+		uint16_t w = (uint16_t) data;
 		unibusadapter->cpu_DATA_transfer(unibone_cpu->data_transfer_request,
 		UNIBUS_CONTROL_DATOB, addr, &w);
 		dbg = 0;
@@ -135,12 +150,14 @@ int unibone_datob(unsigned addr, unsigned data) {
 
 int unibone_dati(unsigned addr, unsigned *data) {
 	uint16_t w;
+	the_flexi_timeout_controller->emu_step_ns(UNIBUS_ACCESS_NS);
 	if (unibone_cpu->direct_memory.value && addr < UNIBUS_IOPAGE_START) {
 		// boot address redirection by M9312? addrs 24/26 now in M9312 IOpage
-		addr |= ddrmem->pmi_address_overlay ;
+		addr |= ddrmem->pmi_address_overlay;
 	}
-	if (unibone_cpu->direct_memory.value && addr < UNIBUS_IOPAGE_START) {
-		// Direct access Non-IOPage memory.
+	if (unibone_cpu->direct_memory.value
+			&& (addr < UNIBUS_IOPAGE_START || unibusadapter->is_rom(addr))) {
+		// Direct access Non-IOPage memory, or to emulated ROM
 		ddrmem->pmi_exam(addr, &w);
 		*data = w;
 		return true;
@@ -148,7 +165,7 @@ int unibone_dati(unsigned addr, unsigned *data) {
 // ARM_DEBUG_PIN0(1) ; // CPU20 diag
 		dbg = 1;
 		unibusadapter->cpu_DATA_transfer(unibone_cpu->data_transfer_request,
-				UNIBUS_CONTROL_DATI, addr, &w);
+		UNIBUS_CONTROL_DATI, addr, &w);
 		*data = w;
 		dbg = 0;
 		bool success = unibone_cpu->data_transfer_request.success;
@@ -184,11 +201,13 @@ cpu_c::cpu_c() :
 	priority_slot.value = 0;  // not used
 
 	// init parameters
+	emulation_speed.readonly = true ; // displays only speed of emulation
 	runmode.value = false;
 	start_switch.value = false;
-	halt_switch.value = true;
+	halt_switch.value = false;
 	continue_switch.value = false;
-	direct_memory.value = false ;
+	direct_memory.value = false;
+	emulation_speed.value = 0.1 ; // non-PMI speed,  see on_param_changed() also
 
 	// current CPU does not publish registers to the bus
 	// must be unibusdevice_c then!
@@ -204,13 +223,15 @@ cpu_c::cpu_c() :
 }
 
 cpu_c::~cpu_c() {
+	// restore
+	the_flexi_timeout_controller->set_mode(flexi_timeout_c::world_time);
 	unibone_cpu = NULL;
 }
 
 // called when "enabled" goes true, before registers plugged to UNIBUS
 // result false: configuration error, do not install
 bool cpu_c::on_before_install(void) {
-	halt_switch.value = true;
+	halt_switch.value = false;
 // all other switches parsed synchronically in worker()
 	start_switch.value = false;
 	continue_switch.value = false;
@@ -223,11 +244,16 @@ void cpu_c::on_after_uninstall(void) {
 // all other switches parsed synchronically in worker()
 	start_switch.value = false;
 	halt_switch.value = true;
-// HALT disabled CPU
+	// HALT disabled CPU
 	stop(NULL);
 }
 
 bool cpu_c::on_param_changed(parameter_c *param) {
+	if (param == &direct_memory) {
+		// speed feedback, as measured
+		// see cpu_c() also
+		emulation_speed.value = direct_memory.new_value ? 0.5 : 0.1 ;
+	}
 	return unibusdevice_c::on_param_changed(param); // more actions (for enable)
 }
 
@@ -238,13 +264,26 @@ void cpu_c::start() {
 	mailbox_execute(ARM2PRU_CPU_ENABLE);
 	unibus->set_arbitrator_active(true);
 	pc.readonly = true; // can only be set on stopped CPU
-	ka11.state = 1;
-// 	what if CONT while WAITING??
+	ka11.state = KA11_STATE_RUNNING;
+	// time base of all device emulators now based on CPU opcode execution
+#ifdef CPU_CONTROLLED_TIME	
+	// only point to switch
+	the_flexi_timeout_controller->set_mode(flexi_timeout_c::emulated_time);
+#else
+	the_flexi_timeout_controller->set_mode(flexi_timeout_c::world_time);
+#endif
+	cycle_count.value = 0;
+
+	// 	what if CONT while WAITING??
 }
 
 // stop CPU logic on PRU and switch arbitration mode
 void cpu_c::stop(const char * info, bool print_pc) {
-	ka11.state = 0;
+
+	// time base of all device emulators now based on "real world" time
+	the_flexi_timeout_controller->set_mode(flexi_timeout_c::world_time);
+
+	ka11.state = KA11_STATE_HALTED;
 	pc.readonly = false;
 	pc.value = ka11.r[7]; // update for editing
 
@@ -314,11 +353,21 @@ void cpu_c::worker(unsigned instance) {
 		start_switch.value = false; // momentary action
 
 		int prev_ka11_state = ka11.state;
+		// ARM_DEBUG_PIN(0,1) ; // measure pmi gain
 		ka11_condstep(&ka11);
-		if (prev_ka11_state > 0 && ka11.state == 0) {
+		// ARM_DEBUG_PIN(0,0) ;
+		if (prev_ka11_state > 0 && ka11.state == KA11_STATE_HALTED) {
 			// CPU run on HALT, sync runmode
 			stop("CPU HALT by opcode", true);
 		}
+		// running CPU: produce emulated time for all devices
+		if (ka11.state == KA11_STATE_RUNNING) {
+			cycle_count.value++;
+		} else if (ka11.state == KA11_STATE_WAITING)
+			// we should us "world" time here, but want to avoid permanent time-source switching
+			// so just assume this here is called every 500ns (estimated average worker loop time)
+			the_flexi_timeout_controller->emu_step_ns(500);
+		// if KA11_STATE_HALTED: world time is used, see start() / stop()
 
 		// serialize asynchronous power events
 		// ACLO inactive & no HALT: reboot
@@ -340,8 +389,10 @@ void cpu_c::worker(unsigned instance) {
 			// Reboot
 			// if HALT switch active: no action, event remains pending
 //			if (!halt_switch.value) {
-			start();		// start CPU logic on PRU, is bus master now
+			stop("ACLO", true);
+			// execute this with real-world time, else lock (CPU not step() ing here)
 			unibus->init(50);		// reset devices
+			start();		// start CPU logic on PRU, is bus master now
 			INFO("ACLO inactive: fetch vector");
 			ka11_reset(&unibone_cpu->ka11);
 			ka11_pwrup_vector_fetch(&unibone_cpu->ka11);

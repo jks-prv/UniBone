@@ -316,6 +316,18 @@ void unibusadapter_c::unregister_rom(uint32_t address) {
 	*iopage_cellhandle = 0;
 }
 
+// is address an emulated ROM?
+bool unibusadapter_c::is_rom(uint32_t address) {
+	if (address & 1)
+			return false ; // only even addr are ROM
+	if (address < UNIBUS_IOPAGE_START)
+		return false ; // ROM only in IOPAGE
+	assert(address <= 0777776);
+	uint8_t iopage_cellhandle = IOPAGE_REGISTER_ENTRY(*deviceregisters, address);
+	return (iopage_cellhandle == IOPAGE_REGISTER_HANDLE_ROM) ;
+}
+
+
 /*** Access requests in [level,slot] table ***/
 
 // initialize slot tables in empty state

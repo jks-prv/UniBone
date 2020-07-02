@@ -81,7 +81,7 @@ init
 
 .input
 
-p run 1
+p c 1
 
 # .print CPU20 started... wait for auto-typed input.
 # dl11 rcv 5000 <This\x20text\x20is\x20typed\x20and\x20echoed\x0d\0x0a>

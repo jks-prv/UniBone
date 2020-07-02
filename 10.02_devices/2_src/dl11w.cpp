@@ -124,18 +124,18 @@ bool slu_c::on_before_install(void) {
 		ERROR("Can not open serial port %s", serialport.value.c_str());
 		return false; // reject "enable"
 	}
-	
+
 	// lock serial port and settings
 	serialport.readonly = true;
 	baudrate.readonly = true;
 	mode.readonly = true;
-	
+
 	INFO("Serial port %s opened", serialport.value.c_str());
 	char buff[256];
 	sprintf(buff, "\n\rSerial port %s opened\n\r", serialport.value.c_str());
 	rs232.cputs(buff);
-	
-	return true ;
+
+	return true;
 }
 
 void slu_c::on_after_uninstall(void) {
@@ -147,7 +147,6 @@ void slu_c::on_after_uninstall(void) {
 	mode.readonly = false;
 	INFO("Serial port %s closed", serialport.value.c_str());
 }
-
 
 bool slu_c::on_param_changed(parameter_c *param) {
 	if (param == &priority_slot) {
@@ -325,8 +324,8 @@ void slu_c::on_after_register_access(unibusdevice_register_t *device_reg,
 
 // after UNIBUS install, device is reset by DCLO cycle
 void slu_c::on_power_changed(signal_edge_enum aclo_edge, signal_edge_enum dclo_edge) {
-	UNUSED(aclo_edge) ;
-	UNUSED(dclo_edge) ;
+	UNUSED(aclo_edge);
+	UNUSED(dclo_edge);
 }
 
 // UNIBUS INIT: clear all registers
@@ -353,24 +352,22 @@ void slu_c::on_init_changed(void) {
 
 // background worker.
 void slu_c::worker_rcv(void) {
-	timeout_c timeout;
+	flexi_timeout_c timeout; // if emulated CPU, use emulated timing
+	// timeout_c timeout; 
 	rs232byte_t rcv_byte;
-
-	// poll with frequency > baudrate, to see single bits
-	//unsigned poll_periods_us = 1000000 / baudrate.value;
-
-	/* Receiver not time critical? UARTs are buffering
-	 So if thread is swapped out and back a burst of characters appear.
-	 -> Wait after each character for transfer time before polling
-	 RS232 again.
-	 */
-	unsigned poll_periods_us = (rs232.CharTransmissionTime_us * 9) / 10;
-	// poll a bit faster to be ahead of char stream. 
-	// don't oversample: PDP-11 must process char in that time
 
 	worker_init_realtime_priority(rt_device);
 
 	while (!workers_terminate) {
+		/* Receiver not time critical? UARTs are buffering
+		 So if thread is swapped out and back a burst of characters appear.
+		 -> Wait after each character for transfer time before polling
+		 RS232 again.
+		 */
+		unsigned poll_periods_us = (rs232.CharTransmissionTime_us * 9) / 10;
+		// poll a bit faster to be ahead of char stream. 
+		// don't oversample: PDP-11 must process char in that time
+
 		timeout.wait_us(poll_periods_us);
 		if (unibusadapter->line_INIT)
 			continue; // do nothing while reset
@@ -379,12 +376,12 @@ void slu_c::worker_rcv(void) {
 		// at the moments, it is only sent on maintenance loopback xmt
 		/* read serial data, if any */
 		if (rs232adapter.rs232byte_rcv_poll(&rcv_byte)) {
-DEBUG("rcv_byte=0x%02x", (unsigned)rcv_byte.c) ;
+			DEBUG("rcv_byte=0x%02x", (unsigned)rcv_byte.c);
 			pthread_mutex_lock(&on_after_rcv_register_access_mutex); // signal changes atomic against UNIBUS accesses
 			rcv_or_err = rcv_fr_err = rcv_p_err = 0;
 			if (rcv_done) { // not yet cleared? overrun!
 				rcv_or_err = 1;
-			DEBUG("RCV OVERRUN") ;
+				DEBUG("RCV OVERRUN");
 			}
 			rcv_buffer = rcv_byte.c;
 			if (rcv_byte.format_error)
@@ -494,7 +491,7 @@ bool ltc_c::on_param_changed(parameter_c *param) {
 	if (param == &frequency) {
 		// allow all values, but complain
 		if (frequency.new_value != 50 && frequency.new_value != 60)
-			WARNING("KW11 non-standard clock value %d, regular 50 or 60", frequency.new_value) ;
+			WARNING("KW11 non-standard clock value %d, regular 50 or 60", frequency.new_value);
 		// return (frequency.new_value == 50 || frequency.new_value == 60);
 	} else if (param == &priority_slot) {
 		intr_request.set_priority_slot(priority_slot.new_value);
@@ -554,8 +551,8 @@ void ltc_c::on_after_register_access(unibusdevice_register_t *device_reg,
 
 // after UNIBUS install, device is reset by DCLO cycle
 void ltc_c::on_power_changed(signal_edge_enum aclo_edge, signal_edge_enum dclo_edge) {
-	UNUSED(aclo_edge) ;
-	UNUSED(dclo_edge) ;
+	UNUSED(aclo_edge);
+	UNUSED(dclo_edge);
 }
 
 // UNIBUS INIT: clear all registers
@@ -568,34 +565,89 @@ void ltc_c::on_init_changed(void) {
 		intr_request.edge_detect_reset(); // but edge_detect() not used
 		// initial condition is "not signaled"
 		// INFO("ltc_c::on_init()");
+		world_time_since_init.start_ns(0);
+		clock_ticks_produced_since_init = 0;
 	}
 }
 
+/*
+ Adpative clock period.
+ Problem: execution of an emulated CPU is
+ 1) slower than a real CPU
+ 2) may be stopped by Linux scheduling.
+ PDP-11 Code may assume silently that clock INTR occurs about every 50.000 CPU cycles
+ (and ticks every 25.000 cycles)
+ So
+ - for an emulated CPU clock ticks must be produced in "cpu time", not in "world time".
+ - clock ticks are used to drive real time clocks for PDP11 OSses, so msut run in "world time""
+ These colliding requirements can be solved by
+ - keeping track how many "world time" ticks should have generated
+ - issuing emulated ticks faster then 50.000 CPU cycles, so the emulated system
+ runs with "faster ticks" after beeing stopped until it catches uop with world time.
+ */
+
 /* background worker.
- Freqnecy of clock signal edges is tied to system time, not to "wait" periods
- This worker may get delayed arbitray amount of time (as every thread), 
- lost edges are compensated
+  Frequency of clock signal edges is tied to absolute system time, not to "wait" periods
+  This worker may get delayed arbitray amount of time (as every thread), 
+  lost edges are compensated.
  */
 void ltc_c::worker(unsigned instance) {
 	UNUSED(instance); // only one
-	timeout_c global_time;
-	timeout_c timeout;
-	int64_t global_next_edge_ns;
+	int64_t global_edge_count = 0;
+	flexi_timeout_c timeout; // world time or driven by CPU cycles
+	int64_t world_next_intr_ns;
 
 // set prio to RT, but less than unibus_adapter
 	worker_init_realtime_priority(rt_device);
 
-	INFO("KW11 time resolution is < %u us",
-			(unsigned )(global_time.get_resolution_ns() / 1000));
-	global_time.start_ns(0);
-	global_next_edge_ns = global_time.elapsed_ns();
-	uint64_t global_edge_count = 0;
+	INFO("KW11 time resolution is < %u us", (unsigned )(timeout.get_resolution_ns() / 1000));
+
+	world_next_intr_ns = the_flexi_timeout_controller->world_now_ns();
 	while (!workers_terminate) {
+		// 1. Generate INTR
+		if (ltc_enable.value) {
+			global_edge_count++; // debugging
+			
+			line_clock_monitor = 1;
+			pthread_mutex_lock(&on_after_register_access_mutex);
+			set_lks_dati_value_and_INTR(intr_enable);
+			pthread_mutex_unlock(&on_after_register_access_mutex);
+		}
+
+		// 2. Calculate next INTR time
+		// signal period as setup by LTC param. may be changed by user, so recalc every loop.
+		int64_t intr_period_ns = (int) (BILLION / frequency.value);
+		
+		int64_t now_ns = the_flexi_timeout_controller->world_now_ns();
+
+		// due to worker() scheduling, INTR signal generated is normally delayed.
+		int64_t missing_ns = now_ns - world_next_intr_ns; // now_ns always > desired INTR time
+		// missing_ns may grow infinitely, if worker() is permanentely too slow
+		
+		// wait shorter than intr_period_ns to catch up with worker() delays
+		// may even be negative, if worker() delayed too long!
+		int64_t wait_time_ns = intr_period_ns - missing_ns;
+		// however, wait always a minimum (half period) of ns.
+		if (wait_time_ns < intr_period_ns / 2)
+			wait_time_ns = intr_period_ns / 2;
+		// next INTR should occur at this time
+		world_next_intr_ns += intr_period_ns;
+
+		// toggle each iNTR, so output half frequency
+		// ARM_DEBUG_PIN0(global_edge_count & 1) ;
+
+		// Test average frequency
+		if (global_edge_count && (global_edge_count %  frequency.value) == 0)
+			DEBUG("LTC: %u secs by INTR", (unsigned)( global_edge_count/ frequency.value) ) ;
+		
+		// wait for next clock event
+		timeout.wait_ns(wait_time_ns);
+
+#ifdef ORG		
 		// signal egde period may change if 50/60 Hz is changed
 		uint64_t edge_period_ns = BILLION / (2 * frequency.value);
-		uint64_t wait_ns;
 		// overdue_ns: time which signal edge is too late
-		int64_t overdue_ns = (int64_t) global_time.elapsed_ns() - global_next_edge_ns;
+		int64_t overdue_ns = (int64_t) global_time.elapsed_ns() - world_next_intr_ns;
 		// INFO does not work on 64 ints
 		// printf("elapsed [ms] =%u, overdue [us] =%u\n", (unsigned) global_time.elapsed_ms(), (unsigned) overdue_ns/1000) ;
 		// if overdue_ns positive, next signal edge should have occured
@@ -613,25 +665,36 @@ void ltc_c::worker(unsigned instance) {
 					pthread_mutex_unlock(&on_after_register_access_mutex);
 				}
 			} else
-				// clock disconnected
-				clock_signal = 0;
+			// clock disconnected
+			clock_signal = 0;
 
 			// time of next signal edge
-			global_next_edge_ns += edge_period_ns;
+			world_next_intr_ns += edge_period_ns;
 			// overdue_ns now time which next signal edge is too late
 			overdue_ns -= edge_period_ns;
 
 			if (overdue_ns < 0)
-				// next edge now in future: wait exact
-				wait_ns = -overdue_ns;
+			// next edge now in future: wait exact
+			wait_ns = -overdue_ns;
 			else
-				// next edge still in past:
-				// wait shorter than signal edge period to keep up slowly
-				wait_ns = edge_period_ns / 2;
+			// next edge still in past:
+			// wait shorter than signal edge period to keep up slowly
+			wait_ns = edge_period_ns / 2;
 			//if ((global_edge_count % 100) == 0)
 			//	INFO("LTC: %u secs by edges", (unsigned)(global_edge_count/100) ) ;
 		}
 		timeout.wait_ns(wait_ns);
+#endif		
 	}
 }
 
+/* Test plan (for 50Hz / 20ms)
+ 1. When flexi_timeout is driveen by real world clock
+ 1.1. INTR period must not be shorter than 10ms
+ 1.2. average INTR period must be 20ms
+ 
+ 2. When flexi_timeout is driveen by simuleted CPU MSYN
+ 2.1. INTR period must not be shorter than "10ms" = 10.000 cycles
+ 2.2. average INTR period must be "20ms" = 20.000 cycles
+
+ */

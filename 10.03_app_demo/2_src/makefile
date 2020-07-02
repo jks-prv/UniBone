@@ -146,7 +146,7 @@ print-%  : ; @echo $* = $($*)
 
 
 
-all:	$(OBJDIR)/$(PROG)
+all:	version $(OBJDIR)/$(PROG)
 
 pru:	$(PRU0_CODE_LIST) $(PRU1_CODE_LIST)
 
@@ -156,6 +156,11 @@ clean:
 .PHONY: all pru clean
 
 
+
+# print compiler version
+version:
+	$(CC) --version
+	
 # TODO
 # auto dependencies of header files
 # http://scottmcpeak.com/autodepend/autodepend.html

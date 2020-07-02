@@ -63,11 +63,6 @@ enum {
 
 #define ISSET(f) ((cpu->psw&(f)) != 0)
 
-enum {
-	STATE_HALTED = 0,
-	STATE_RUNNING = 1,
-	STATE_WAITING = 2
-};
 
 word
 sgn(word w)
@@ -365,6 +360,21 @@ step(KA11 *cpu)
 #define TR(m)	trace("EXEC [%06o] "#m"\n", PC-2)
 #define TRB(m)	trace("EXEC [%06o] "#m"%s\n", PC-2, by ? "B" : "")
 
+	{
+		// external interrupt from parallel threads?
+		pthread_mutex_lock(&cpu->mutex) ;
+		bool external_intr = cpu->external_intr ;
+		word external_intrvec = cpu->external_intrvec ;
+		cpu->external_intr = 0 ;
+		pthread_mutex_unlock(&cpu->mutex) ;
+		if (external_intr){
+			//ARM_DEBUG_PIN1(0);	// INTR processed
+			cpu->state = KA11_STATE_RUNNING ;
+			TRAP(external_intrvec);
+		}	
+	}
+
+
 	oldpsw = PSW;
 	INA(PC, cpu->ir);
 	PC += 2;	/* don't increment on bus error! */
@@ -551,8 +561,8 @@ step(KA11 *cpu)
 
 	/* Operate */
 	switch(cpu->ir & 7){
-	case 0:	TR(HALT); cpu->state = STATE_HALTED; return;
-	case 1:	TR(WAIT); cpu->state = STATE_WAITING; return;
+	case 0:	TR(HALT); cpu->state = KA11_STATE_HALTED; return;
+	case 1:	TR(WAIT); /*ARM_DEBUG_PIN0(1); */cpu->state = KA11_STATE_WAITING; return ; // no traps
 	case 2:	TR(RTI);
 		BA = SP; POP; IN(PC);
 		BA = SP; POP; IN(PSW);
@@ -570,7 +580,7 @@ ill:	TRAP(4);
 be:	if(cpu->be > 1){
 		printf("double bus error, HALT\n");
 		trace("double bus error, HALT");
-		cpu->state = STATE_HALTED;
+		cpu->state = KA11_STATE_HALTED;
 		return;
 	}
 	trace("bus error at %06o\n", cpu->ba);
@@ -591,19 +601,6 @@ trap:
 //	SVC;
 
 service:
-{
-	// external interrupt from parallel threads?
-	pthread_mutex_lock(&cpu->mutex) ;
-	bool external_intr = cpu->external_intr ;
-	word external_intrvec = cpu->external_intrvec ;
-	cpu->external_intr = 0 ;
-	pthread_mutex_unlock(&cpu->mutex) ;
-	if (external_intr){
-		TRAP(external_intrvec);
-	}	
-}
-
-
 	c = PSW >> 5;
 	if(oldpsw & PSW_T){
 		oldpsw &= ~PSW_T;
@@ -633,7 +630,7 @@ service:
 		return;
 }
 
-// to be called from parallel threads to signal asnyc intr
+// to be called from parallel threads to signal async intr
 // (unibusadapter worker thread)
 void
 ka11_setintr(KA11 *cpu, unsigned vec)
@@ -642,8 +639,10 @@ ka11_setintr(KA11 *cpu, unsigned vec)
 	cpu->external_intr = true;
 	cpu->external_intrvec = vec;
 	trace("INTR vec=%03o\n", vec) ;
-	if (cpu->state == STATE_WAITING) // atomically
-		cpu->state = STATE_RUNNING ;
+//	if (cpu->state == KA11_STATE_WAITING) // atomically
+//		cpu->state = KA11_STATE_RUNNING ;
+//	ARM_DEBUG_PIN1(1);	// INTR pending
+//	ARM_DEBUG_PIN0(0);	// not waiting
 	pthread_mutex_unlock(&cpu->mutex) ;
 }
 
@@ -673,13 +672,15 @@ be:
 void
 ka11_condstep(KA11 *cpu)
 {
-	if(cpu->state == STATE_RUNNING || cpu->state == STATE_WAITING)
+	if(cpu->state == KA11_STATE_RUNNING || cpu->state == KA11_STATE_WAITING)
 		// GRANT Interrupts before opcode fetch, or when CPU is on WAIT
 	unibone_grant_interrupts() ;
 
-	if((cpu->state == STATE_RUNNING) ||
-	   (cpu->state == STATE_WAITING && cpu->traps)){
-		cpu->state = STATE_RUNNING;
+	if((cpu->state == KA11_STATE_RUNNING) ||
+	   (cpu->state == KA11_STATE_WAITING && cpu->traps)
+	   || (cpu->state == KA11_STATE_WAITING && cpu->external_intr) ){
+//ARM_DEBUG_PIN0(0);	   
+		cpu->state = KA11_STATE_RUNNING;
 		// external_intr WAIT handled atomically in ka11_setintr() !
 
 		svc(cpu, cpu->bus);
@@ -690,8 +691,10 @@ ka11_condstep(KA11 *cpu)
 void
 run(KA11 *cpu)
 {
-	cpu->state = STATE_RUNNING;
-	while(cpu->state != STATE_HALTED){
+	cpu->state = KA11_STATE_RUNNING;
+//	ARM_DEBUG_PIN0(0);	   
+	
+	while(cpu->state != KA11_STATE_HALTED){
 		ka11_condstep(cpu);
 	}
 

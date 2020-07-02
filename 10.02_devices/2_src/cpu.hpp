@@ -69,6 +69,10 @@ public:
 	parameter_unsigned_c pc = parameter_unsigned_c(this, "PC", "pc",/*readonly*/
 	false, "", "%06o", "program counter helper register.", 16, 8);
 
+	parameter_unsigned_c cycle_count = parameter_unsigned_c(this, "cycle_count", "cc",/*readonly*/
+	true, "", "%u", "CPU opcodes executed since last HALT (32bit roll around).", 32, 10);
+
+
 	struct Bus bus; // UNIBUS interface of CPU
 	struct KA11 ka11; // Angelos CPU state
 

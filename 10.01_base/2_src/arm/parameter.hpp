@@ -158,6 +158,21 @@ public:
 	void set(uint64_t new_value);
 };
 
+class parameter_double_c: public parameter_c {
+
+public:
+
+	// dynamic state
+	double value;
+	double new_value;
+
+	parameter_double_c(parameterized_c *parameterized, string name, string shortname,
+			bool readonly, string unit, string format, string info);
+	string *render(void) override;
+	void parse(string text) override;
+	void set(double new_value);
+};
+
 // objects with parameters are "parameterized" and inherit this.
 class parameterized_c {
 public:

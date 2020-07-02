@@ -95,6 +95,7 @@ public:
 
 	bool register_rom(uint32_t address) ;
 	void unregister_rom(uint32_t address) ;
+	bool is_rom(uint32_t address) ;
 
 	// Helper for request processing
 	void requests_init(void);

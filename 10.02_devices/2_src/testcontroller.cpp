@@ -142,7 +142,7 @@ testcontroller_c::~testcontroller_c() {
 		delete dma_channel_buffer[i];
 	}
 
-	for (unsigned slot = 0; slot < PRIORITY_SLOT_COUNT; slot++)
+	for (unsigned slot = 1; slot < PRIORITY_SLOT_COUNT; slot++)
 		for (unsigned level_index = 0; level_index < 4; level_index++)
 			delete intr_request[slot][level_index];
 }

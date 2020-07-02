@@ -217,6 +217,38 @@ string *parameter_unsigned64_c::render() {
 	return &printbuffer;
 }
 
+parameter_double_c::parameter_double_c(parameterized_c *parameterized, string name,
+		string shortname,
+		bool readonly, string unit, string format, string info) :
+		parameter_c(parameterized, name, shortname, readonly, unit, format, info) {
+	value = 0.0;
+}
+
+string *parameter_double_c::render(void) {
+	char buffer[1024];
+	sprintf(buffer, format.c_str(), value);
+	printbuffer = buffer;
+	return &printbuffer;
+}
+
+void parameter_double_c::parse(string text) {
+	if (readonly)
+		throw bad_parameter_readonly("Parameter \"" + name + "\" is read-only");
+	TRIM_STRING(text);
+	new_value = atof(text.c_str());
+	set(new_value);
+}
+
+void parameter_double_c::set(double new_value) {
+	if (value == new_value)
+		return; // call "on_change" only on change
+
+	this->new_value = new_value;
+	// reject parsed value, if device parameter check complains
+	if (parameterized == NULL || parameterized->on_param_changed(this))
+		value = new_value;
+}
+
 // add reference to parameter. It will be automatically deleted
 parameter_c *parameterized_c::param_add(parameter_c *param) {
 	parameter.push_back(param);

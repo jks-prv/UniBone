@@ -92,13 +92,13 @@ bool ddrmem_c::pmi_deposit(uint32_t addr, uint16_t w) {
 
 bool ddrmem_c::pmi_exam(uint32_t addr, uint16_t *w) {
 	assert((addr & 1) == 0); // must be even
-	assert(addr < UNIBUS_IOPAGE_START);
+//	assert(addr < UNIBUS_IOPAGE_START); IOPAGE ROM also allowed
 	*w = base_virtual->memory.words[addr / 2];
 	return true;
 }
 
 
-// IF an emualted CPU is working on DDRRAm directly via PMI
+// IF an emulated CPU is working on DDRRAM directly via PMI
 // AND an M9312 is overlaying addresses with 773000 
 // THEN also PMI accesses must be redirected the same way.
 //

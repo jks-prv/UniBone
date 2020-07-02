@@ -81,9 +81,10 @@ public:
 	parameter_bool_c enabled = parameter_bool_c(NULL, "enabled", "en", true,
 			"device installed and ready to use?");
 
-	parameter_unsigned_c emulation_speed = parameter_unsigned_c(NULL, "emulation_speed", "es",
-	false, "", "%d", "1 = original speed, > 1: mechanics is this factor faster", 8, 10);
+	parameter_double_c emulation_speed = parameter_double_c(NULL, "emulation_speed", "es",
+	false, "", "%g", "1 = original speed, > 1: faster");
 	// 1 = original speed, > 1: mechanics is this factor faster
+	// < 1: emulation is slower than original
 
 	parameter_unsigned_c verbosity = parameter_unsigned_c(NULL, "verbosity", "v", false, "",
 			"%d", "1 = fatal, 2 = error, 3 = warning, 4 = info, 5 = debug", 8, 10);

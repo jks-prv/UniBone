@@ -1,4 +1,12 @@
-// Interface of 11/20 PCU emulator to UniBone
+// Interface of 11/20 CPU emulator to UniBone
+
+enum {
+	KA11_STATE_HALTED = 0,
+	KA11_STATE_RUNNING = 1,
+	KA11_STATE_WAITING = 2
+};
+
+
 typedef struct KA11 KA11;
 struct KA11
 {
