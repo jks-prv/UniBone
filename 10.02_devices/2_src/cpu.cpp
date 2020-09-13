@@ -212,6 +212,7 @@ cpu_c::cpu_c() :
 	// current CPU does not publish registers to the bus
 	// must be unibusdevice_c then!
 	register_count = 0;
+	swab_vbit.value = false;
 
 	memset(&bus, 0, sizeof(bus));
 	memset(&ka11, 0, sizeof(ka11));
@@ -343,6 +344,7 @@ void cpu_c::worker(unsigned instance) {
 		if (!runmode.value && start_switch.value) {
 			// START, or HALT+START: reset system
 			ka11.r[7] = pc.value & 0xffff;
+			ka11.sw = swreg.value & 0xffff;
 			unibus->init(50);
 			ka11_reset(&ka11);
 			if (!halt_switch.value) {
@@ -410,6 +412,7 @@ void cpu_c::worker(unsigned instance) {
 			stop("CPU HALT by switch", true);
 		}
 
+		ka11.swab_vbit = (swab_vbit.value == true);
 	}
 }
 
